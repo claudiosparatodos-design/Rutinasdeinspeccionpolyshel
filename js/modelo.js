@@ -1,4 +1,4 @@
-/* Lógica de formatos y registros: límites, evaluación, avance y alertas. */
+/* Lógica de formatos y registros: campos, límites, evaluación, avance y alertas. */
 (function () {
   'use strict';
 
@@ -12,35 +12,43 @@
     ],
     inspectores: [],
     firmaObligatoria: false,
-    formatos: {} // { formatoId: { filas: [...] } } — máquinas y límites editados en Configuración
+    limites: {} // { formatoId: { campoId: [min, max] } } — editados en Configuración
   };
 
   M.config = U.clone(M.CONFIG_DEFECTO);
+  M.plantillas = {}; // id -> plantilla JSON ya cargada
 
   M.formatos = () => window.FORMATOS || [];
   M.formato = (id) => M.formatos().find((f) => f.id === id);
 
-  /** Filas (máquinas) vigentes para un formato, tomando en cuenta lo editado en Configuración. */
-  M.filasVigentes = (formato) => {
-    const ov = M.config.formatos && M.config.formatos[formato.id];
-    const filas = ov && Array.isArray(ov.filas) && ov.filas.length ? ov.filas : formato.tabla.filas;
-    return filas.filter((f) => f.activo !== false);
+  /** Carga todas las plantillas (se usan de forma síncrona después). */
+  M.cargarPlantillas = async () => {
+    const ids = Array.from(new Set(M.formatos().map((f) => f.plantilla)));
+    await Promise.all(ids.map(async (id) => { M.plantillas[id] = await P.cargar(id); }));
   };
+  M.plantilla = (f) => M.plantillas[f.plantilla];
 
-  M.columnas = (formato) => formato.tabla.columnas;
-  M.colsNumericas = (formato) => formato.tabla.columnas.filter((c) => c.tipo === 'numero');
+  /** Secciones del formato (algunas dependen del registro, p. ej. arranque/paro). */
+  M.secciones = (f, reg) => (typeof f.secciones === 'function' ? f.secciones(reg, M.plantilla(f)) : f.secciones);
+  /** Todas las secciones posibles del formato (con todos sus tipos), sin repetir título. */
+  M.seccionesTodas = (f) => {
+    const regs = f.tipos ? f.tipos.map((t) => ({ tipo: t.id })) : [null];
+    const out = [];
+    for (const r of regs) for (const s of M.secciones(f, r)) if (!out.some((x) => x.titulo === s.titulo)) out.push(s);
+    return out;
+  };
+  M.campos = (f, reg) => [].concat(...M.secciones(f, reg).map((s) => s.campos));
+  M.campo = (f, reg, id) => M.campos(f, reg).find((c) => c.id === id);
+  M.colsNumericas = (f, reg) => M.campos(f, reg).filter((c) => c.tipo === 'numero');
 
-  M.omitida = (fila, col) => !!(fila.omitir && fila.omitir.includes(col.id));
-
-  /** Límite [min, max] de una columna para una fila (null si no tiene). */
-  M.limite = (col, fila) => {
-    if (col.tipo !== 'numero') return null;
-    const l = fila && fila.limites && fila.limites[col.id];
-    // Cada lado del rango propio, si está vacío, toma el general de la columna
-    const min = l && l[0] != null && l[0] !== '' ? l[0] : col.min;
-    const max = l && l[1] != null && l[1] !== '' ? l[1] : col.max;
+  /** Límite [min, max] de un campo numérico (Configuración tiene prioridad). */
+  M.limite = (f, campo) => {
+    if (campo.tipo !== 'numero') return null;
+    const ov = M.config.limites && M.config.limites[f.id] && M.config.limites[f.id][campo.id];
+    const min = ov && ov[0] != null && ov[0] !== '' ? ov[0] : campo.min;
+    const max = ov && ov[1] != null && ov[1] !== '' ? ov[1] : campo.max;
     if ((min == null || min === '') && (max == null || max === '')) return null;
-    return [min === '' ? null : min, max === '' ? null : max];
+    return [min == null || min === '' ? null : Number(min), max == null || max === '' ? null : Number(max)];
   };
 
   M.textoLimite = (lim, unidad) => {
@@ -51,155 +59,172 @@
     return '≤ ' + lim[1] + u;
   };
 
-  /** Evalúa un valor: null (vacío/sin criterio), 'ok', 'bajo', 'alto', 'mal' (✗). */
-  M.evaluar = (col, fila, valor) => {
+  /** Evalúa un valor: null (vacío), 'ok', 'bajo', 'alto', 'mal'. */
+  M.evaluar = (f, campo, valor) => {
     if (valor == null || valor === '') return null;
-    if (col.tipo === 'check') return valor === 'mal' ? 'mal' : 'ok';
-    if (col.tipo !== 'numero') return null;
+    if (campo.tipo === 'check') return valor === 'mal' ? 'mal' : 'ok';
+    if (campo.tipo === 'opciones') return campo.alerta && campo.alerta.includes(valor) ? 'mal' : 'ok';
+    if (campo.tipo !== 'numero') return null;
     const n = U.aNumero(valor);
     if (n == null) return null;
-    const lim = M.limite(col, fila);
+    const lim = M.limite(f, campo);
     if (!lim) return 'ok';
-    if (lim[0] != null && n < Number(lim[0])) return 'bajo';
-    if (lim[1] != null && n > Number(lim[1])) return 'alto';
+    if (lim[0] != null && n < lim[0]) return 'bajo';
+    if (lim[1] != null && n > lim[1]) return 'alto';
     return 'ok';
   };
-
   M.esAlerta = (ev) => ev === 'bajo' || ev === 'alto' || ev === 'mal';
 
   M.TEXTO_CHECK = { ok: '✓', mal: '✗', na: 'N/A' };
-
-  /** Texto para mostrar/imprimir un valor. */
-  M.textoValor = (col, v) => {
+  M.textoValor = (campo, v) => {
     if (v == null || v === '') return '';
-    if (col.tipo === 'check') return M.TEXTO_CHECK[v] || String(v);
-    if (col.tipo === 'numero') { const n = U.aNumero(v); return n == null ? String(v) : U.fmtNum(n, col.decimales); }
+    if (campo.tipo === 'check') return M.TEXTO_CHECK[v] || String(v);
+    if (campo.tipo === 'paloma') return v ? '✓' : '';
+    if (campo.tipo === 'numero') { const n = U.aNumero(v); return n == null ? String(v) : U.fmtNum(n, campo.decimales); }
     return String(v);
   };
 
-  /** Columnas que cuentan para considerar completa una fila. */
-  M.requeridas = (formato, fila) => formato.tabla.columnas.filter((c) => c.tipo !== 'texto' && !M.omitida(fila, c));
+  const lleno = (v) => v != null && v !== '';
+  /** Campos que cuentan para el avance (no texto ni opcionales). */
+  M.requeridos = (campos) => campos.filter((c) => c.tipo !== 'texto' && !c.opcional);
 
-  M.estadoFila = (reg, formato, fila) => {
-    const vals = (reg.valores && reg.valores[fila.id]) || {};
-    const req = M.requeridas(formato, fila);
+  M.estadoSeccion = (f, reg, s) => {
+    const vals = reg.valores || {};
+    const req = M.requeridos(s.campos);
     let llenos = 0, alertas = 0;
-    const cols = formato.tabla.columnas;
-    for (const c of cols) {
-      if (M.omitida(fila, c)) continue;
-      const v = vals[c.id];
-      if (v != null && v !== '' && c.tipo !== 'texto') llenos++;
-      if (M.esAlerta(M.evaluar(c, fila, v))) alertas++;
+    for (const c of s.campos) {
+      if (c.tipo !== 'texto' && lleno(vals[c.id])) llenos++;
+      if (M.esAlerta(M.evaluar(f, c, vals[c.id]))) alertas++;
     }
-    const noOpera = !!vals._noOpera;
-    const tocada = llenos > 0 || noOpera || !!vals.obs;
-    const completa = noOpera || req.every((c) => vals[c.id] != null && vals[c.id] !== '');
-    return { llenos, total: req.length, alertas, noOpera, completa, tocada };
+    const completa = req.length ? req.every((c) => lleno(vals[c.id])) : s.campos.some((c) => lleno(vals[c.id]));
+    return { llenos, total: req.length || s.campos.filter((c) => c.tipo !== 'texto').length, alertas, completa, tocada: llenos > 0 };
   };
 
-  /** Resumen del registro: avance y lista de alertas. */
-  M.resumen = (reg, formato) => {
-    formato = formato || M.formato(reg.formatoId);
-    const filas = reg.filas || (formato ? M.filasVigentes(formato) : []);
-    let completas = 0;
-    const alertas = [];
-    if (!formato) return { completas: 0, total: filas.length, alertas, fuera: 0, anomalias: 0, pct: 0 };
-    for (const f of filas) {
-      const e = M.estadoFila(reg, formato, f);
-      if (e.completa) completas++;
-      const vals = (reg.valores && reg.valores[f.id]) || {};
-      for (const c of formato.tabla.columnas) {
-        if (M.omitida(f, c)) continue;
-        const ev = M.evaluar(c, f, vals[c.id]);
-        if (M.esAlerta(ev)) alertas.push({ fila: f, col: c, valor: vals[c.id], tipo: ev, lim: M.limite(c, f) });
+  /** Resumen del registro: avance y alertas. */
+  M.resumen = (reg, f) => {
+    f = f || M.formato(reg.formatoId);
+    const out = { completas: 0, total: 0, llenos: 0, requeridos: 0, alertas: [], fuera: 0, anomalias: 0, pct: 0 };
+    if (!f || !M.plantilla(f)) return out;
+    const vals = reg.valores || {};
+    for (const s of M.secciones(f, reg)) {
+      const e = M.estadoSeccion(f, reg, s);
+      out.total++;
+      if (e.completa) out.completas++;
+      for (const c of s.campos) {
+        const ev = M.evaluar(f, c, vals[c.id]);
+        if (M.esAlerta(ev)) out.alertas.push({ seccion: s, campo: c, valor: vals[c.id], tipo: ev, lim: M.limite(f, c) });
       }
     }
-    const fuera = alertas.filter((a) => a.tipo !== 'mal').length;
-    return {
-      completas, total: filas.length, alertas, fuera, anomalias: alertas.length - fuera,
-      pct: filas.length ? Math.round((completas / filas.length) * 100) : 0
-    };
+    const req = M.requeridos(M.campos(f, reg));
+    out.requeridos = req.length;
+    out.llenos = req.filter((c) => lleno(vals[c.id])).length;
+    out.pct = req.length ? Math.round(out.llenos / req.length * 100) : (out.completas ? 100 : 0);
+    out.fuera = out.alertas.filter((a) => a.tipo !== 'mal').length;
+    out.anomalias = out.alertas.length - out.fuera;
+    return out;
   };
 
   M.textoAlerta = (a) => {
-    if (a.tipo === 'mal') return a.col.label + ': anomalía (✗)';
-    const v = M.textoValor(a.col, a.valor) + (a.col.unidad ? ' ' + a.col.unidad : '');
-    return a.col.label + ': ' + v + ' (' + (a.tipo === 'alto' ? 'arriba de ' + a.lim[1] : 'abajo de ' + a.lim[0]) + ')';
+    const u = a.campo.unidad ? ' ' + a.campo.unidad : '';
+    if (a.tipo === 'mal') return a.campo.label + ': ' + (a.campo.tipo === 'opciones' ? a.valor : 'anomalía (✗)');
+    return a.campo.label + ': ' + M.textoValor(a.campo, a.valor) + u + ' (' + (a.tipo === 'alto' ? 'arriba de ' + a.lim[1] : 'abajo de ' + a.lim[0]) + ')';
   };
 
   M.nombreTurno = (id) => {
     const t = (M.config.turnos || []).find((x) => x.id === String(id));
     return t ? t.nombre : (id ? 'Turno ' + id : '');
   };
+  M.usaTurno = (f) => f.registroPor === 'turno' || !!f.conTurno;
+
+  M.nombreTipo = (f, reg) => {
+    if (!f.tipos) return '';
+    const t = f.tipos.find((x) => x.id === reg.tipo) || f.tipos[0];
+    return t.nombre;
+  };
+  M.tituloRegistro = (f, reg) => (f.tipos ? M.nombreTipo(f, reg) : M.tituloCorto(f));
 
   /** Crea un registro nuevo con los datos automáticos llenos. */
-  M.nuevoRegistro = (formato, inspector) => {
+  M.nuevoRegistro = (f, inspector, extra) => {
     const ahora = new Date();
-    const enc = {};
-    for (const c of formato.encabezado) {
-      if (c.auto === 'hoy') enc[c.id] = U.hoyISO(ahora);
-      else if (c.auto === 'turno') enc[c.id] = U.turnoActual(M.config.turnos, ahora);
-      else if (c.auto === 'ahora') enc[c.id] = U.ahoraHM(ahora);
-      else if (c.auto === 'inspector') enc[c.id] = inspector || '';
-      else enc[c.id] = '';
-    }
-    const firmas = {};
-    for (const f of formato.firmas || []) firmas[f.id] = { nombre: f.auto === 'inspector' ? (inspector || '') : '', img: '' };
-    return {
-      id: U.hoyISO(ahora) + '_' + formato.id + '_' + U.uid(),
-      formatoId: formato.id,
-      formatoVersion: formato.codigo + ' rev ' + formato.revision,
-      fecha: enc.fecha || U.hoyISO(ahora),
-      turno: enc.turno || '',
-      encabezado: enc,
-      filas: U.clone(M.filasVigentes(formato)),
+    const fecha = U.hoyISO(ahora);
+    const turno = M.usaTurno(f) ? U.turnoActual(M.config.turnos, ahora) : '';
+    const reg = Object.assign({
+      id: fecha + '_' + f.id + '_' + U.uid(),
+      formatoId: f.id,
+      fecha,
+      turno,
+      encabezado: { inspector: inspector || '', hora: U.ahoraHM(ahora) },
       valores: {},
-      pie: {},
-      firmas,
+      firmas: {},
       estado: 'borrador',
       creadoPor: inspector || '',
       creadoEn: Date.now(),
       modificadoPor: inspector || '',
       modificadoEn: Date.now(),
       historial: [{ accion: 'Creado', por: inspector || '', en: Date.now() }]
-    };
+    }, extra || {});
+    if (f.tipos && !reg.tipo) reg.tipo = f.tipos[0].id;
+    for (const fi of f.firmas || []) reg.firmas[fi.id] = { nombre: fi.auto === 'inspector' ? (inspector || '') : '', img: '' };
+    return reg;
   };
 
   /** Texto plano con todo el contenido del registro, para el buscador. */
   M.textoBusqueda = (reg) => {
     const f = M.formato(reg.formatoId);
-    const partes = [reg.fecha, U.fechaCorta(reg.fecha), M.nombreTurno(reg.turno), reg.estado === 'completo' ? 'completo' : 'en proceso'];
-    if (f) partes.push(f.titulo, f.codigo, f.subtitulo || '');
-    for (const k in (reg.encabezado || {})) partes.push(reg.encabezado[k]);
-    for (const k in (reg.pie || {})) partes.push(reg.pie[k]);
+    const partes = [reg.fecha, U.fechaCorta(reg.fecha), M.nombreTurno(reg.turno), reg.estado === 'completo' ? 'finalizado' : 'en proceso'];
+    if (reg.encabezado) partes.push(reg.encabezado.inspector);
     for (const k in (reg.firmas || {})) partes.push(reg.firmas[k] && reg.firmas[k].nombre);
-    for (const fila of reg.filas || []) {
-      const vals = (reg.valores || {})[fila.id];
-      if (!vals) continue;
-      partes.push(fila.nombre, fila.codigo || '');
-      if (f) for (const c of f.tabla.columnas) if (vals[c.id] != null) partes.push(M.textoValor(c, vals[c.id]));
-      if (vals._noOpera) partes.push('no opera');
+    if (f) {
+      partes.push(f.titulo, f.archivo, M.nombreTipo(f, reg));
+      if (M.plantilla(f)) {
+        for (const s of M.secciones(f, reg)) {
+          let tiene = false;
+          for (const c of s.campos) {
+            const v = reg.valores && reg.valores[c.id];
+            if (v == null || v === '') continue;
+            tiene = true;
+            partes.push(c.label, M.textoValor(c, v));
+          }
+          if (tiene) partes.push(s.titulo);
+        }
+      }
     }
     return M.normalizar(partes.filter(Boolean).join(' '));
   };
 
-  /** Título del formato en tipo oración, para listas (la hoja conserva las mayúsculas). */
-  M.tituloCorto = (f) => (f ? f.nombreCorto || U.capital(f.titulo.toLowerCase()) : '');
+  /** Título del formato en tipo oración, para listas. */
+  M.tituloCorto = (f) => (f ? f.nombreCorto || f.titulo : '');
 
   M.normalizar = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  M.nombreArchivo = (s) => M.normalizar(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-  /** Agrupa columnas consecutivas con el mismo "grupo" para encabezados combinados. */
-  M.gruposColumnas = (columnas) => {
+  /* ---------------- Páginas (vista previa, impresión y Excel) ---------------- */
+  /** Agrupa registros por formato y devuelve las páginas en orden. */
+  M.paginas = (registros) => {
+    const porFormato = new Map();
+    for (const r of registros) {
+      const f = M.formato(r.formatoId);
+      if (!f) continue;
+      if (!porFormato.has(f)) porFormato.set(f, []);
+      porFormato.get(f).push(r);
+    }
     const out = [];
-    for (const c of columnas) {
-      const ultimo = out[out.length - 1];
-      if (c.grupo && ultimo && ultimo.grupo === c.grupo) ultimo.cols.push(c);
-      else out.push({ grupo: c.grupo || null, cols: [c] });
+    for (const f of M.formatos()) {
+      const regs = porFormato.get(f);
+      if (!regs) continue;
+      const pl = M.plantilla(f);
+      for (const pg of f.paginar(regs, pl)) out.push(Object.assign({ formato: f, plantilla: pl }, pg));
     }
     return out;
   };
 
-  M.nombreArchivo = (s) => M.normalizar(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  /** Páginas del formato en blanco. */
+  M.paginasBlanco = (f) => {
+    const pl = M.plantilla(f);
+    const hojas = f.blanco || (f.hojaPlantilla ? [f.hojaPlantilla] : f.tipos ? [] : Array.from(new Set(M.secciones(f).map((s) => s.hoja).filter(Boolean))));
+    const lista = hojas.length ? hojas : pl.hojas.map((h) => h.nombre);
+    return lista.map((n) => ({ formato: f, plantilla: pl, hoja: n, nombre: n, llenado: {} }));
+  };
 
   window.M = M;
 })();

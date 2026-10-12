@@ -464,9 +464,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .med.mal .entrada .input { border-color: var(--bad); color: var(--bad); }
 .med.omit { background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, var(--surface-3) 6px, var(--surface-3) 12px); color: var(--muted); }
 .opciones-btn { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.opciones-btn { grid-auto-columns: minmax(0, 1fr); }
 .opciones-btn button {
-  min-height: 52px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface);
-  font-weight: 700; font-size: 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--text-2);
+  min-height: 52px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); padding: 0 6px;
+  font-weight: 700; font-size: 15px; white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--text-2);
 }
 .opciones-btn button[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
 .opciones-btn button.b-ok[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
@@ -511,7 +512,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .firmas-cap { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .firma-caja { border: 1px dashed var(--border-strong); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .firma-caja .lienzo-firma { height: 110px; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center; cursor: pointer; overflow: hidden; border: 1px solid var(--border); }
-.firma-caja .lienzo-firma img { max-width: 100%; max-height: 100%; background: #fff; }
+.firma-caja .lienzo-firma img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
 .firma-caja .lienzo-firma span { color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .pad-firma { width: 100%; height: 240px; border-radius: 10px; border: 1px solid var(--border-strong); background: #fff; touch-action: none; display: block; }
 .barra-final { position: sticky; bottom: 0; z-index: 10; margin-top: 16px; padding: 12px 0; background: linear-gradient(to top, var(--bg) 70%, transparent); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
@@ -592,7 +593,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .previa-barra .zoom { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 44px; text-align: center; color: #dbe3ee; }
 .previa-paginas { flex: 1; overflow: auto; padding: 24px 16px 40px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
 .pagina-env { flex: none; position: relative; }
-.pagina-env .hoja { position: absolute; top: 0; left: 0; transform-origin: top left; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.pagina-env > .xl-pagina { position: absolute; top: 0; left: 0; transform-origin: top left; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
 .pagina-num { position: absolute; bottom: -18px; right: 0; font-size: 11px; color: #c8d0db; }
 
 /* ==========================================================================
@@ -617,8 +618,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .maq-edit + .maq-edit { margin-top: 10px; }
 .maq-edit-cab { display: grid; grid-template-columns: auto minmax(140px, 1.4fr) minmax(90px, .7fr) auto auto; gap: 8px; align-items: center; padding: 10px; }
 @media (max-width: 640px) { .maq-edit-cab { grid-template-columns: 1fr 1fr; } }
-.maq-edit-lim { padding: 10px 14px 14px; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; background: var(--surface-2); border-radius: 0 0 12px 12px; }
-.lim-campo { display: grid; grid-template-columns: 1fr 72px 72px; gap: 6px; align-items: center; font-size: 13px; }
+.maq-edit-lim { padding: 10px 14px 14px; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px 18px; background: var(--surface-2); border-radius: 0 0 12px 12px; }
+.lim-campo { display: grid; grid-template-columns: 1fr 70px 70px; gap: 6px; align-items: center; font-size: 13px; }
 .lim-campo .input { min-height: 38px; padding: 6px 8px; font-size: 14px; text-align: center; }
 .orden-btns { display: flex; flex-direction: column; }
 .orden-btns .btn-icono { width: 32px; height: 22px; border-radius: 6px; }
@@ -637,3 +638,31 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: gira .8s linear infinite; }
 @keyframes gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation-duration: 0s !important; } }
+
+/* Casillas tipo "paloma" (rutina de arranque / paro) */
+.med.paloma {
+  flex-direction: row; align-items: center; gap: 14px; text-align: left; cursor: pointer; font: inherit; color: var(--text);
+  min-height: 64px; width: 100%;
+}
+.med.paloma:hover { border-color: var(--primary); }
+.med.paloma .paloma-caja {
+  width: 38px; height: 38px; border-radius: 8px; border: 2.5px solid var(--border-strong); flex: none;
+  display: grid; place-items: center; background: var(--surface); color: #fff;
+}
+.med.paloma .paloma-caja .ico { width: 26px; height: 26px; stroke-width: 3; }
+.med.paloma .paloma-txt { flex: 1; font-size: 15px; line-height: 1.35; }
+.med.paloma.hecho { border-color: var(--ok); background: var(--ok-soft); }
+.med.paloma.hecho .paloma-caja { background: var(--ok); border-color: var(--ok); }
+.matriz-env { overflow-x: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.matriz { border-collapse: collapse; width: 100%; font-size: 14px; }
+.matriz th, .matriz td { border-bottom: 1px solid var(--border); padding: 6px 10px; }
+.matriz thead th { background: var(--surface-2); font-size: 13px; font-weight: 650; color: var(--text-2); text-align: center; vertical-align: bottom; min-width: 150px; }
+.matriz tbody th { text-align: left; font-weight: 650; white-space: nowrap; }
+.matriz td { text-align: center; }
+.matriz-btn {
+  width: 52px; height: 44px; border-radius: 10px; border: 2px solid var(--border-strong); background: var(--surface);
+  display: inline-grid; place-items: center; cursor: pointer; color: #fff;
+}
+.matriz-btn .ico { width: 24px; height: 24px; stroke-width: 3; }
+.matriz-btn.hecho { background: var(--ok); border-color: var(--ok); }
+.formato-card .archivo { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 4px; }

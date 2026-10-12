@@ -21,15 +21,10 @@
   };
   V.excel = async () => { if (!window.ExcelJS) await V.cargarScript('vendor/exceljs.min.js'); return window.X; };
 
-  /* ---------- Hojas escaladas ---------- */
-  const MM = 96 / 25.4;
-  V.anchoHojaPx = (formato) => (((formato.hoja && formato.hoja.orientacion) || 'horizontal') === 'vertical' ? 215.9 : 279.4) * MM;
-
-  /** Crea el contenedor de una página con la hoja adentro (escala se aplica con V.escalar). */
-  V.pagina = (formato, reg, num, total) => {
-    const env = U.html('<div class="pagina-env">' + R.hoja(formato, reg) + (num ? '<span class="pagina-num">Página ' + num + ' de ' + total + '</span>' : '') + '</div>');
-    return env;
-  };
+  /* ---------- Páginas escaladas ---------- */
+  /** Contenedor de una página (papel carta con la hoja del formato). */
+  V.pagina = (pg, num, total) => U.html('<div class="pagina-env">' + P.pagina(pg.plantilla, P.hoja(pg.plantilla, pg.hoja), pg.llenado) +
+    (num ? '<span class="pagina-num">' + U.esc(pg.nombre || '') + ' · página ' + num + ' de ' + total + '</span>' : '') + '</div>');
 
   /** Ajusta la escala de todas las páginas dentro de un contenedor. zoom = número o 'ajustar'. */
   V.escalar = (cont, zoom) => {
@@ -39,6 +34,8 @@
     for (const p of paginas) {
       const hoja = p.firstElementChild;
       hoja.style.transform = 'none';
+      hoja.style.transformOrigin = '0 0';
+      hoja.style.position = 'absolute';
       const w = hoja.offsetWidth, h = hoja.offsetHeight;
       const s = zoom === 'ajustar' ? Math.min(1.25, disponible / w) : zoom;
       usado = s;
@@ -55,31 +52,24 @@
     raiz.innerHTML = hojasHTML.join('');
     const imgs = U.$$('img', raiz);
     const listas = imgs.map((im) => im.complete ? Promise.resolve() : new Promise((ok) => { im.onload = im.onerror = ok; }));
-    Promise.all(listas).then(() => {
-      setTimeout(() => {
-        window.print();
-      }, 60);
-    });
+    const fuentes = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+    Promise.all(listas.concat(fuentes)).then(() => setTimeout(() => window.print(), 80));
   };
   window.addEventListener('afterprint', () => { const r = U.$('#raiz-impresion'); if (r) r.innerHTML = ''; });
 
-  V.imprimirRegistros = (registros) => {
-    const hojas = registros.map((reg) => { const f = M.formato(reg.formatoId); return f ? R.hoja(f, reg) : ''; }).filter(Boolean);
-    V.imprimirHojas(hojas);
-  };
-
-  V.ordenarParaImprimir = (regs) => regs.slice().sort((a, b) =>
-    a.fecha.localeCompare(b.fecha) || String(a.turno).localeCompare(String(b.turno)) || (a.creadoEn || 0) - (b.creadoEn || 0));
+  V.htmlPaginas = (paginas) => paginas.map((pg) => P.pagina(pg.plantilla, P.hoja(pg.plantilla, pg.hoja), pg.llenado));
+  V.imprimirRegistros = (registros) => V.imprimirHojas(V.htmlPaginas(M.paginas(registros)));
 
   /**
    * Vista previa a pantalla completa.
    * opciones: { registros: [...] }  ó  { formatoBlanco: formato }
    */
   V.vistaPrevia = (opciones) => {
-    const registros = opciones.registros ? V.ordenarParaImprimir(opciones.registros) : null;
     const blanco = opciones.formatoBlanco || null;
-    const total = registros ? registros.length : 1;
-    const titulo = blanco ? 'Formato en blanco · ' + blanco.codigo : 'Vista previa · ' + total + (total === 1 ? ' hoja' : ' hojas');
+    const paginasL = blanco ? M.paginasBlanco(blanco) : M.paginas(opciones.registros || []);
+    const total = paginasL.length;
+    if (!total) { U.toast('No hay nada que mostrar', 'aviso'); return; }
+    const titulo = blanco ? 'Formato en blanco · ' + blanco.titulo : 'Vista previa · ' + total + (total === 1 ? ' hoja' : ' hojas') + ' · ' + (opciones.registros || []).length + ' registro' + ((opciones.registros || []).length === 1 ? '' : 's');
 
     const cont = U.html(
       '<div class="previa" role="dialog" aria-modal="true" aria-label="Vista previa de impresión">' +
@@ -96,8 +86,7 @@
         '<div class="previa-paginas"></div>' +
       '</div>');
     const paginas = U.$('.previa-paginas', cont);
-    if (blanco) paginas.appendChild(V.pagina(blanco, null));
-    else registros.forEach((reg, i) => { const f = M.formato(reg.formatoId); if (f) paginas.appendChild(V.pagina(f, reg, i + 1, total)); });
+    paginasL.forEach((pg, i) => paginas.appendChild(V.pagina(pg, i + 1, total)));
 
     document.body.appendChild(cont);
     document.body.style.overflow = 'hidden';
@@ -118,29 +107,49 @@
       else if (a === 'mas') { zoom = Math.min(2.5, (typeof zoom === 'number' ? zoom : 1) + 0.15); aplicar(); }
       else if (a === 'menos') { zoom = Math.max(0.25, (typeof zoom === 'number' ? zoom : 1) - 0.15); aplicar(); }
       else if (a === 'ajustar') { zoom = 'ajustar'; aplicar(); }
-      else if (a === 'imprimir') {
-        if (blanco) V.imprimirHojas([R.hoja(blanco, null)]);
-        else V.imprimirRegistros(registros);
-      } else if (a === 'excel') {
+      else if (a === 'imprimir') V.imprimirHojas(V.htmlPaginas(paginasL));
+      else if (a === 'excel') {
         b.disabled = true;
-        try {
-          const X = await V.excel();
-          if (blanco) await X.exportarBlanco(blanco); else await X.exportarFormato(registros);
-          U.toast('Archivo de Excel descargado');
-        } catch (err) { console.error(err); U.toast('No se pudo generar el Excel', 'error'); }
+        if (blanco) await V.descargarOriginal(blanco); else await V.exportarExcel(opciones.registros);
         b.disabled = false;
       }
     });
   };
 
-  /* ---------- Excel con aviso ---------- */
+  /* ---------- Excel ---------- */
+  /** Descarga el Excel original del formato (en blanco). */
+  V.descargarOriginal = async (f) => {
+    try {
+      const r = await fetch('plantillas/' + f.plantilla + '.xlsx');
+      U.descargar(await r.blob(), f.archivo);
+      U.toast('Formato original descargado');
+    } catch (e) { U.toast('No se pudo descargar el formato', 'error'); }
+  };
+
+  /** Excel con el mismo formato (tipo 'formato') o tabla de datos (tipo 'datos'). */
   V.exportarExcel = async (registros, tipo) => {
-    if (!registros.length) { U.toast('No hay registros seleccionados', 'aviso'); return; }
+    if (!registros || !registros.length) { U.toast('No hay registros seleccionados', 'aviso'); return; }
     U.toast('Generando Excel…', 'aviso', 1500);
     try {
-      const X = await V.excel();
-      if (tipo === 'datos') await X.exportarDatos(registros); else await X.exportarFormato(registros);
-      U.toast('Excel descargado (' + registros.length + (registros.length === 1 ? ' registro)' : ' registros)'));
+      if (tipo === 'datos') {
+        const X = await V.excel();
+        await X.exportarDatos(registros);
+        U.toast('Excel de datos descargado (' + registros.length + (registros.length === 1 ? ' registro)' : ' registros)'));
+        return;
+      }
+      const paginas = M.paginas(registros);
+      const porPlantilla = new Map();
+      for (const pg of paginas) {
+        if (!porPlantilla.has(pg.plantilla)) porPlantilla.set(pg.plantilla, []);
+        porPlantilla.get(pg.plantilla).push(pg);
+      }
+      const fechas = registros.map((r) => r.fecha).sort();
+      const rango = fechas[0] === fechas[fechas.length - 1] ? fechas[0] : fechas[0] + '_a_' + fechas[fechas.length - 1];
+      for (const [pl, pgs] of porPlantilla) {
+        const base = pl.archivo.replace(/\.xlsx$/i, '');
+        await XL.exportar(pl, pgs, base + ' ' + rango + '.xlsx');
+      }
+      U.toast('Excel descargado (' + paginas.length + (paginas.length === 1 ? ' hoja)' : ' hojas)'));
     } catch (e) {
       console.error(e);
       U.toast('No se pudo generar el Excel', 'error');
@@ -160,10 +169,10 @@
     ? '<span class="badge badge-warn" title="Guardado en la tableta, pendiente de subir a la nube">' + U.icon('sync') + 'Por subir</span>'
     : '';
 
-  V.miniAvance = (res) => '<div class="mini-avance"><div class="avance ' + (res.pct === 100 ? 'ok' : '') + '"><span style="width:' + res.pct + '%"></span></div><span class="t-sm num">' + res.completas + '/' + res.total + '</span></div>';
+  V.miniAvance = (res) => '<div class="mini-avance"><div class="avance ' + (res.pct === 100 ? 'ok' : '') + '"><span style="width:' + res.pct + '%"></span></div><span class="t-sm num">' + res.pct + '%</span></div>';
 
   V.opcionesFormatos = (sel, conTodos) => (conTodos ? '<option value="">Todos los formatos</option>' : '') +
-    M.formatos().map((f) => '<option value="' + U.esc(f.id) + '"' + (f.id === sel ? ' selected' : '') + '>' + U.esc(f.codigo + ' · ' + f.titulo) + '</option>').join('');
+    M.formatos().map((f) => '<option value="' + U.esc(f.id) + '"' + (f.id === sel ? ' selected' : '') + '>' + U.esc(f.titulo) + '</option>').join('');
 
   V.opcionesTurnos = (sel) => '<option value="">Todos los turnos</option>' +
     (M.config.turnos || []).map((t) => '<option value="' + U.esc(t.id) + '"' + (String(sel) === t.id ? ' selected' : '') + '>' + U.esc(t.nombre) + '</option>').join('');

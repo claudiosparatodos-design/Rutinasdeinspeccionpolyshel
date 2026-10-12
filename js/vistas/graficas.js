@@ -16,7 +16,7 @@
   Vistas.graficas = async (main) => {
     const g = U.lsGet(CLAVE, {});
     const f0 = M.formato(g.formato) || M.formatos()[0];
-    const st = { formato: f0.id, maquinas: g.maquinas || [], col: g.col || '', rapido: g.rapido || '30d', tabla: false };
+    const st = { formato: f0.id, seccion: g.seccion || '', campos: g.campos || [], rapido: g.rapido || '30d', tabla: false };
     Object.assign(st, U.rangoRapido(st.rapido));
     let registros = [];
     let grafica = null;
@@ -25,51 +25,53 @@
       '<div class="vista-cab"><div class="titulos"><h1>Tendencias</h1><p>Cómo se comporta cada medición con el tiempo. Útil para detectar desgaste antes de una falla.</p></div></div>' +
       '<div class="tarjeta graf-filtros">' +
         '<div class="campo"><label for="g-formato">Formato</label><select class="select" id="g-formato">' + V.opcionesFormatos(st.formato, false) + '</select></div>' +
-        '<div class="campo"><label for="g-col">Medición</label><select class="select" id="g-col"></select></div>' +
+        '<div class="campo"><label for="g-sec">Sección / equipo</label><select class="select" id="g-sec"></select></div>' +
         '<div class="campo"><label for="g-desde">Desde</label><input class="input" type="date" id="g-desde"></div>' +
         '<div class="campo"><label for="g-hasta">Hasta</label><input class="input" type="date" id="g-hasta"></div>' +
-        '<div style="grid-column:1/-1"><div class="etq" style="margin-bottom:8px">Equipos (hasta 3 para comparar)</div><div class="chips" id="g-maqs"></div></div>' +
+        '<div style="grid-column:1/-1"><div class="etq" style="margin-bottom:8px">Mediciones (hasta 3 para comparar)</div><div class="chips" id="g-maqs"></div></div>' +
         '<div class="chips" style="grid-column:1/-1">' + [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['mesPasado', 'Mes pasado'], ['anio', 'Este año']].map(([k, t]) => '<button class="chip" data-rapido="' + k + '">' + t + '</button>').join('') + '</div>' +
       '</div>' +
       '<div class="estad" id="g-estad"></div>' +
       '<div class="tarjeta" style="margin-bottom:16px"><div class="tarjeta-cab"><h2 id="g-titulo"></h2><span class="espacio"></span>' +
         '<div class="segmentado"><button data-vista="graf" aria-pressed="true">' + U.icon('grafica', 'sm') + 'Gráfica</button><button data-vista="tabla">' + U.icon('tabla', 'sm') + 'Tabla</button></div></div>' +
         '<div class="graf-lienzo" id="g-lienzo"><canvas id="g-canvas" role="img"></canvas></div><div id="g-tabla" hidden></div></div>' +
-      '<div class="tarjeta"><div class="tarjeta-cab"><h2>Alertas por equipo en el periodo</h2></div><div class="tarjeta-cuerpo" id="g-anom"></div></div>';
+      '<div class="tarjeta"><div class="tarjeta-cab"><h2>Alertas por sección en el periodo</h2></div><div class="tarjeta-cuerpo" id="g-anom"></div></div>';
 
     const $ = (s) => U.$(s, main);
     const formato = () => M.formato(st.formato);
-    const guardarFiltros = () => U.lsSet(CLAVE, { formato: st.formato, maquinas: st.maquinas, col: st.col, rapido: st.rapido });
+    const guardarFiltros = () => U.lsSet(CLAVE, { formato: st.formato, seccion: st.seccion, campos: st.campos, rapido: st.rapido });
 
+    // Secciones que tienen mediciones numéricas
+    const seccionesNum = () => M.seccionesTodas(formato()).filter((x) => x.campos.some((c) => c.tipo === 'numero'));
     function pintarControles() {
-      const f = formato();
-      const nums = M.colsNumericas(f);
-      if (!nums.find((c) => c.id === st.col)) st.col = nums[0] ? nums[0].id : '';
-      $('#g-col').innerHTML = nums.map((c) => '<option value="' + e(c.id) + '"' + (c.id === st.col ? ' selected' : '') + '>' + e((c.grupo ? c.grupo.replace(/\s*\(.*\)/, '') + ' · ' : '') + c.label + (c.unidad ? ' (' + c.unidad + ')' : '')) + '</option>').join('');
-      const filas = M.filasVigentes(f);
-      const col = nums.find((c) => c.id === st.col);
-      const aplican = filas.filter((x) => !col || !M.omitida(x, col));
-      st.maquinas = st.maquinas.filter((id) => aplican.some((x) => x.id === id));
-      if (!st.maquinas.length && aplican[0]) st.maquinas = [aplican[0].id];
-      $('#g-maqs').innerHTML = aplican.map((x) => '<button class="chip" data-maq="' + e(x.id) + '" aria-pressed="' + st.maquinas.includes(x.id) + '">' + e(x.nombre) + '</button>').join('');
+      const secs = seccionesNum();
+      if (!secs.find((x) => x.titulo === st.seccion)) st.seccion = secs[0] ? secs[0].titulo : '';
+      $('#g-sec').innerHTML = secs.map((x) => '<option' + (x.titulo === st.seccion ? ' selected' : '') + '>' + e(x.titulo) + '</option>').join('');
+      const sec = secs.find((x) => x.titulo === st.seccion);
+      const nums = sec ? sec.campos.filter((c) => c.tipo === 'numero') : [];
+      st.campos = st.campos.filter((id) => nums.some((c) => c.id === id));
+      if (!st.campos.length && nums[0]) st.campos = [nums[0].id];
+      $('#g-maqs').innerHTML = nums.map((c) => '<button class="chip" data-maq="' + e(c.id) + '" aria-pressed="' + st.campos.includes(c.id) + '">' + e(c.label + (c.unidad ? ' (' + c.unidad + ')' : '')) + '</button>').join('');
       $('#g-desde').value = st.desde; $('#g-hasta').value = st.hasta;
       U.$$('[data-rapido]', main).forEach((b) => b.setAttribute('aria-pressed', b.dataset.rapido === st.rapido));
     }
 
     function datos() {
       const f = formato();
-      const col = f.tabla.columnas.find((c) => c.id === st.col);
-      const regs = registros.filter((r) => r.formatoId === f.id).sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.turno).localeCompare(String(b.turno)) || a.creadoEn - b.creadoEn);
+      const sec = seccionesNum().find((x) => x.titulo === st.seccion);
+      const campos = sec ? st.campos.map((id) => sec.campos.find((c) => c.id === id)).filter(Boolean) : [];
+      const regs = registros.filter((r) => r.formatoId === f.id && campos.some((c) => r.valores && r.valores[c.id] != null && r.valores[c.id] !== ''))
+        .sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.turno).localeCompare(String(b.turno)) || a.creadoEn - b.creadoEn);
       const etiquetas = regs.map((r) => U.fechaCorta(r.fecha).slice(0, 5) + (r.turno ? ' T' + r.turno : ''));
-      const series = st.maquinas.map((id) => {
-        const fila = M.filasVigentes(f).find((x) => x.id === id) || { id, nombre: id };
-        const puntos = regs.map((r) => {
-          const fr = (r.filas || []).find((x) => x.id === id) || fila;
-          const v = r.valores && r.valores[id] ? U.aNumero(r.valores[id][st.col]) : null;
-          return { y: v, ev: v == null ? null : M.evaluar(col, fr, v), r };
-        });
-        return { fila, puntos, lim: col ? M.limite(col, fila) : null };
-      });
+      const series = campos.map((c) => ({
+        fila: { id: c.id, nombre: c.label },
+        campo: c,
+        puntos: regs.map((r) => { const v = U.aNumero(r.valores[c.id]); return { y: v, ev: v == null ? null : M.evaluar(f, c, v), r }; }),
+        lim: M.limite(f, c)
+      }));
+      // Unidad común (solo se muestra si todas coinciden)
+      const unidades = Array.from(new Set(campos.map((c) => c.unidad || '')));
+      const col = campos[0] ? Object.assign({}, campos[0], { label: campos.length === 1 ? campos[0].label : st.seccion, unidad: unidades.length === 1 ? unidades[0] : '' }) : null;
       return { f, col, regs, etiquetas, series };
     }
 
@@ -89,7 +91,7 @@
     }
 
     async function pintarGrafica(d) {
-      $('#g-titulo').textContent = d.col ? d.col.label + (d.col.unidad ? ' (' + d.col.unidad + ')' : '') + (d.series.length === 1 ? ' · ' + d.series[0].fila.nombre : '') : 'Sin mediciones numéricas';
+      $('#g-titulo').textContent = d.col ? st.seccion + ' · ' + (d.series.length === 1 ? d.series[0].fila.nombre : 'comparación') + (d.col.unidad ? ' (' + d.col.unidad + ')' : '') : 'Sin mediciones numéricas';
       $('#g-lienzo').hidden = st.tabla; $('#g-tabla').hidden = !st.tabla;
       U.$$('[data-vista]', main).forEach((b) => b.setAttribute('aria-pressed', (b.dataset.vista === 'tabla') === st.tabla));
 
@@ -163,9 +165,10 @@
       const f = formato();
       const conteo = new Map();
       registros.filter((r) => r.formatoId === f.id).forEach((r) => M.resumen(r, f).alertas.forEach((a) => {
-        const c = conteo.get(a.fila.id) || { nombre: a.fila.nombre, n: 0, tipos: {} };
-        c.n++; c.tipos[a.col.label] = (c.tipos[a.col.label] || 0) + 1;
-        conteo.set(a.fila.id, c);
+        const k = a.seccion.titulo;
+        const c = conteo.get(k) || { nombre: k, n: 0, tipos: {} };
+        c.n++; c.tipos[a.campo.label] = (c.tipos[a.campo.label] || 0) + 1;
+        conteo.set(k, c);
       }));
       const lista = Array.from(conteo.values()).sort((a, b) => b.n - a.n);
       const max = lista.length ? lista[0].n : 1;
@@ -185,8 +188,8 @@
 
     main.addEventListener('change', (ev) => {
       const t = ev.target;
-      if (t.id === 'g-formato') { st.formato = t.value; st.maquinas = []; st.col = ''; guardarFiltros(); pintar(); }
-      else if (t.id === 'g-col') { st.col = t.value; guardarFiltros(); pintar(); }
+      if (t.id === 'g-formato') { st.formato = t.value; st.seccion = ''; st.campos = []; guardarFiltros(); pintar(); }
+      else if (t.id === 'g-sec') { st.seccion = t.value; st.campos = []; guardarFiltros(); pintar(); }
       else if (t.id === 'g-desde' || t.id === 'g-hasta') {
         st.desde = $('#g-desde').value || st.desde; st.hasta = $('#g-hasta').value || st.hasta;
         if (st.desde > st.hasta) { const x = st.desde; st.desde = st.hasta; st.hasta = x; }
@@ -198,8 +201,8 @@
       if (!b) { const tr = ev.target.closest('tr[data-id]'); if (tr) App.ir('/ver/' + encodeURIComponent(tr.dataset.id)); return; }
       if (b.dataset.maq) {
         const id = b.dataset.maq;
-        if (st.maquinas.includes(id)) { if (st.maquinas.length > 1) st.maquinas = st.maquinas.filter((x) => x !== id); }
-        else { st.maquinas.push(id); if (st.maquinas.length > 3) st.maquinas.shift(); }
+        if (st.campos.includes(id)) { if (st.campos.length > 1) st.campos = st.campos.filter((x) => x !== id); }
+        else { st.campos.push(id); if (st.campos.length > 3) st.campos.shift(); }
         guardarFiltros(); pintar();
       } else if (b.dataset.rapido) { st.rapido = b.dataset.rapido; Object.assign(st, U.rangoRapido(st.rapido)); guardarFiltros(); suscribir(); }
       else if (b.dataset.vista) { st.tabla = b.dataset.vista === 'tabla'; pintarGrafica(datos()); }

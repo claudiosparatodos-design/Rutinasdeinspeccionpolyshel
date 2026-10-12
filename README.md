@@ -11,25 +11,25 @@ Página web para capturar en tableta las rutinas de inspección de máquinas (te
 | Sección | Para qué sirve |
 |---|---|
 | **Inicio** | Tablero del día: rutinas hechas por turno, equipos revisados, alertas, turno actual y rutinas pendientes de terminar. |
-| **Capturar** | Llenado en tableta. Dos modos: **por máquina** (tarjetas grandes, ideal para ir caminando de equipo en equipo) y **formato completo** (la misma tabla de la hoja impresa). |
+| **Capturar** | Llenado en tableta por secciones (equipo o área), con botones grandes, teclado numérico y casillas ✓. El botón **Ver formato** muestra en vivo la hoja de Excel con lo capturado. |
 | **Registros** | Todo lo guardado en la nube, con buscador por fechas, formato, turno, inspector, equipo, estado o cualquier texto/dato. Pestaña **Buscar lecturas** para encontrar mediciones (p. ej. *temperatura de aceite mayor que 50* o *todo lo fuera de rango*). |
-| **Exportar e imprimir** | Elegir formato, fechas (rango o **días específicos** en el calendario) y turno. Vista previa, impresión directa y Excel con **el mismo diseño del formato**. También imprime el **formato en blanco** por si falla la tableta. |
+| **Exportar e imprimir** | Elegir formato, fechas (rango o **días específicos** en el calendario) y turno. Vista previa, impresión directa y Excel: **el mismo archivo original, ya lleno**. También imprime el **formato en blanco** por si falla la tableta. |
 | **Tendencias** | Gráfica de cada medición en el tiempo con sus límites, comparación de hasta 3 equipos y conteo de alertas por equipo. |
-| **Configuración** | Turnos, inspectores, equipos y rangos por formato (sin tocar código), firmas obligatorias, cambio de contraseña, respaldo y restauración. |
+| **Configuración** | Turnos, inspectores, rangos de alerta por lectura (sin tocar código), firmas obligatorias, cambio de contraseña, respaldo, restauración y descarga de los Excel originales. |
 
 Detalles que hacen el llenado más práctico que el papel:
 
 - La **fecha, turno, hora e inspector se llenan solos**.
 - Teclado **numérico** en las mediciones y paso automático al siguiente campo con *Enter*.
 - Cada medición muestra su **rango** y se pone en **rojo** si está fuera; las alertas aparecen en el tablero.
-- Botones **Todo bien** (marca todas las verificaciones ✓), **No opera** (equipo parado) y **Foto** de evidencia con la cámara.
-- **Hora de lectura** automática por equipo.
-- **Firma** con el dedo en la tableta; sale en la impresión y en el Excel.
+- Botones **Todo bien / Marcar todo** (marca las verificaciones ✓ de la sección) y **Foto** de evidencia con la cámara.
+- Si ya hay una captura del mismo día (o turno), la página ofrece **continuarla** en lugar de duplicarla.
+- **Firma** con el dedo en la tableta (rutina de arranque/paro); sale en la impresión y en el Excel con el nombre.
 - **Guardado automático** mientras se captura: si la tableta se apaga o se cierra la página, no se pierde nada y se puede continuar desde *Inicio*.
 - **Funciona sin internet**: lo capturado se guarda en la tableta y se sube solo a la nube al volver la señal (el indicador de arriba muestra el estado).
 - Se puede **instalar como app** en la tableta (ícono en la pantalla de inicio).
 - Tema claro y oscuro; se adapta a tableta vertical/horizontal, computadora y teléfono.
-- Excel con una hoja por rutina, índice con enlaces, listo para imprimir en carta horizontal. Además, un **Excel de datos** (tabla plana) para análisis.
+- El Excel exportado es **el archivo original del formato** con los datos escritos en sus celdas (una pestaña por hoja: por semana, por mes, etc.). Además, un **Excel de datos** (tabla plana) para análisis.
 
 ---
 
@@ -93,31 +93,44 @@ Firebase (de Google) guarda los registros en la nube y valida la contraseña. El
 
 ## 4. Formatos
 
-Los formatos se definen en [`js/formatos.js`](js/formatos.js). Con esa misma definición se dibujan la captura en tableta, la vista previa / impresión y el Excel, así que los tres salen iguales y en el mismo orden que la hoja de papel:
+La página usa **los mismos archivos de Excel de la planta** (carpeta [`formatos/`](formatos)). Cada hoja se dibuja tal cual es en Excel (logo, bordes, colores, casillas) y, al exportar, se llena **el archivo original**: el Excel que se descarga es idéntico al formato, solo que con los datos escritos.
 
-- `encabezado`: datos generales (fecha, turno, horas, inspector…)
-- `tabla.filas`: equipos (con `limites` propios y celdas que `omitir`)
-- `tabla.columnas`: mediciones (`numero` con `min`/`max`, `check` ✓/✗/N/A, `opciones`, `hora`, `texto`) y `grupo` para encabezados combinados
-- `pie`, `notas` y `firmas`
+| Rutina en la página | Archivo original | Cómo se acomoda |
+|---|---|---|
+| Rutina de inspección de servicios extrusión | `RUTINA INSPECCION SERVICIOS PARA TURNOS.xlsx` (Hoja2) | Una captura por turno. 5 fechas × 3 turnos por hoja; los medidores de agua, una vez al día. |
+| Registro de recipientes sujetos a presión | `REGISTRO DE PRESIONES Y TEMPERATURA.xlsx` (pulmones TRA-2 y TRA-1) | Una captura por turno. Una hoja por mes y pulmón: presión y temperatura por turno, purga diaria y purga quincenal de válvula. Los fines de semana se marcan en verde según el mes. |
+| Revisión de alarmas y detectores de humo | `REGISTRO DE PRESIONES Y TEMPERATURA.xlsx` (Nave 1 y Nave 2) | Una captura por día de revisión. Una hoja por mes y nave. |
+| Lecturas CFE medidor | `FORMATO DE RECOLECCION DE LECTURAS.xlsx` | Una captura por día. 10 fechas por hoja; hojas de Extrusión y Nave 6. |
+| Consumos de agua | `FORMATO CONSUMO DE AGUA.xlsx` | Una captura por día. 9 fechas por hoja, tres medidores. |
+| Rutina de arranque / paro de planta | `RUTINAS PARO-ARRANQUE PLANTA.xlsx` | Una captura por evento; cada casilla del formato se marca con ✓ y lleva firmas. |
 
-Los dos formatos incluidos (**FO-MTO-001** y **FO-MTO-002**) son **de ejemplo** y se reemplazan por los formatos oficiales de la planta. Los equipos y rangos también se pueden ajustar desde *Configuración → Equipos y límites* sin tocar código.
+Los rangos de alerta (por ejemplo, 15 °C de temperatura máxima del agua o 8 kg/cm² de presión de operación de los pulmones) se ajustan en *Configuración → Rangos de alerta*.
 
-Para poner un logo en la hoja impresa y el Excel, coloca el archivo en `img/` y escribe su ruta en `logo` dentro de `js/config.js`.
+### Cambiar o agregar un formato
+
+1. Guarda el Excel en `formatos/`.
+2. Si es nuevo, agrégalo a la lista `PLANTILLAS` de [`tools/convertir_plantillas.py`](tools/convertir_plantillas.py).
+3. Ejecuta `python3 tools/convertir_plantillas.py` (requiere `openpyxl` y `Pillow`). Esto genera `plantillas/<id>.json` y copia el Excel a `plantillas/<id>.xlsx`.
+4. En [`js/formatos.js`](js/formatos.js) define qué se captura (`secciones`) y en qué celda va cada dato (`paginar`).
 
 ## Estructura
 
 ```
-index.html            Página única (acceso + aplicación)
-css/app.css           Diseño de la aplicación
-css/hoja.css          Hoja del formato e impresión (carta)
-js/config.js          Empresa, logo y conexión a la nube  ← lo único que se edita para la nube
-js/formatos.js        Definición de los formatos
-js/modelo.js          Rangos, alertas y avance
-js/db.js              Nube (Firebase) / modo local
-js/render.js          Hoja del formato (vista previa e impresión)
-js/excel.js           Excel con el mismo diseño
-js/vistas/*.js        Pantallas
-vendor/               Firebase, ExcelJS y Chart.js (incluidos, sin depender de internet)
-sw.js, manifest       Instalación como app y uso sin conexión
-firestore.rules       Reglas de seguridad para la nube
+index.html               Página única (acceso + aplicación)
+css/app.css              Diseño de la aplicación
+css/hoja.css             Hojas de los formatos e impresión (carta)
+formatos/                Excel originales de la planta
+plantillas/              Formatos convertidos (JSON para dibujar + copia del Excel original)
+tools/convertir_plantillas.py   Convierte formatos/ → plantillas/
+js/config.js             Empresa y conexión a la nube  ← lo único que se edita para la nube
+js/formatos.js           Qué se captura en cada formato y en qué celda va
+js/plantilla.js          Dibuja las hojas igual que Excel (vista previa e impresión)
+js/xlsx.js               Llena el Excel original para exportar
+js/modelo.js             Rangos, alertas y avance
+js/db.js                 Nube (Firebase) / modo local
+js/excel.js              Excel de datos (tablas)
+js/vistas/*.js           Pantallas
+vendor/                  Firebase, ExcelJS, JSZip, Chart.js y fuentes (incluidos, sin depender de internet)
+sw.js, manifest          Instalación como app y uso sin conexión
+firestore.rules          Reglas de seguridad para la nube
 ```

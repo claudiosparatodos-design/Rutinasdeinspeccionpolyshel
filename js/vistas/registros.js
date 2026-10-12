@@ -8,6 +8,8 @@
   Vistas.registros = async (main, params) => {
     const def = Object.assign({ pestana: 'registros', rapido: '30d', texto: '', formato: '', turno: '', inspector: '', maquina: '', estado: '', alertas: false,
       lFormato: M.formatos()[0] && M.formatos()[0].id, lMaquina: '', lCol: '', lCond: 'fuera', lValor: '' }, U.lsGet(CLAVE, {}));
+    if (def.formato && !M.formato(def.formato)) def.formato = '';
+    if (!M.formato(def.lFormato)) { def.lFormato = M.formatos()[0].id; def.lMaquina = ''; def.lCol = ''; }
     const st = Object.assign(def, U.rangoRapido(def.rapido === 'personal' ? 'hoy' : def.rapido));
     if (def.rapido === 'personal' && def.desde && def.hasta) { st.desde = def.desde; st.hasta = def.hasta; }
     if (params.consulta && params.consulta.get('alertas')) { st.alertas = true; st.pestana = 'registros'; st.rapido = '7d'; Object.assign(st, U.rangoRapido('7d')); }
@@ -33,11 +35,11 @@
           '<div class="campo" data-solo="registros"><label for="f-formato">Formato</label><select class="select" id="f-formato">' + V.opcionesFormatos(st.formato, true) + '</select></div>' +
           '<div class="campo" data-solo="registros"><label for="f-turno">Turno</label><select class="select" id="f-turno">' + V.opcionesTurnos(st.turno) + '</select></div>' +
           '<div class="campo" data-solo="registros"><label for="f-inspector">Inspector</label><select class="select" id="f-inspector"></select></div>' +
-          '<div class="campo" data-solo="registros"><label for="f-maquina">Equipo</label><select class="select" id="f-maquina"></select></div>' +
+          '<div class="campo" data-solo="registros"><label for="f-maquina">Sección / equipo</label><select class="select" id="f-maquina"></select></div>' +
           '<div class="campo" data-solo="registros"><label for="f-estado">Estado</label><select class="select" id="f-estado"><option value="">Todos</option><option value="completo">Finalizados</option><option value="borrador">En proceso</option></select></div>' +
           '<label class="check-linea" data-solo="registros"><input type="checkbox" id="f-alertas"> Solo con alertas</label>' +
           '<div class="campo" data-solo="lecturas"><label for="l-formato">Formato</label><select class="select" id="l-formato">' + V.opcionesFormatos(st.lFormato, false) + '</select></div>' +
-          '<div class="campo" data-solo="lecturas"><label for="l-maquina">Equipo</label><select class="select" id="l-maquina"></select></div>' +
+          '<div class="campo" data-solo="lecturas"><label for="l-maquina">Sección / equipo</label><select class="select" id="l-maquina"></select></div>' +
           '<div class="campo" data-solo="lecturas"><label for="l-col">Dato / parámetro</label><select class="select" id="l-col"></select></div>' +
           '<div class="campo" data-solo="lecturas"><label for="l-cond">Condición</label><select class="select" id="l-cond">' +
             '<option value="fuera">Con alerta (fuera de rango / ✗)</option><option value="todas">Todas las lecturas</option><option value="mayor">Mayor que…</option><option value="menor">Menor que…</option><option value="igual">Igual a…</option><option value="texto">Contiene texto…</option></select></div>' +
@@ -66,14 +68,17 @@
       $('#f-inspector').innerHTML = '<option value="">Todos</option>' + Array.from(insp).sort().map((n) => '<option' + (n === st.inspector ? ' selected' : '') + '>' + e(n) + '</option>').join('');
       // Equipos (de todos los formatos o del elegido)
       const maqs = new Map();
-      M.formatos().filter((f) => !st.formato || f.id === st.formato).forEach((f) => (f.tabla.filas.concat(M.filasVigentes(f))).forEach((x) => maqs.set(x.id, x.nombre)));
+      if (st.formato && M.formato(st.formato)) M.seccionesTodas(M.formato(st.formato)).forEach((x) => maqs.set(x.titulo, x.titulo));
+      $('#f-maquina').disabled = !st.formato;
       $('#f-maquina').innerHTML = '<option value="">Todos</option>' + Array.from(maqs).map(([id, n]) => '<option value="' + e(id) + '"' + (id === st.maquina ? ' selected' : '') + '>' + e(n) + '</option>').join('');
       // Lecturas
       const lf = M.formato(st.lFormato) || M.formatos()[0];
       if (lf) {
-        const filas = new Map(); lf.tabla.filas.concat(M.filasVigentes(lf)).forEach((x) => filas.set(x.id, x.nombre));
+        const filas = new Map(); M.seccionesTodas(lf).forEach((x) => filas.set(x.titulo, x.titulo));
+        const camposL = []; const vistos = new Set();
+        M.seccionesTodas(lf).filter((x) => !st.lMaquina || x.titulo === st.lMaquina).forEach((x) => x.campos.forEach((c) => { if (!vistos.has(c.label + '|' + (c.unidad || ''))) { vistos.add(c.label + '|' + (c.unidad || '')); camposL.push(c); } }));
         $('#l-maquina').innerHTML = '<option value="">Todos</option>' + Array.from(filas).map(([id, n]) => '<option value="' + e(id) + '"' + (id === st.lMaquina ? ' selected' : '') + '>' + e(n) + '</option>').join('');
-        $('#l-col').innerHTML = '<option value="">Todos los datos</option>' + lf.tabla.columnas.map((c) => '<option value="' + e(c.id) + '"' + (c.id === st.lCol ? ' selected' : '') + '>' + e((c.grupo ? c.grupo.replace(/\s*\(.*\)/, '') + ' · ' : '') + c.label + (c.unidad ? ' (' + c.unidad + ')' : '')) + '</option>').join('');
+        $('#l-col').innerHTML = '<option value="">Todos los datos</option>' + camposL.map((c) => '<option value="' + e(c.label) + '"' + (c.label === st.lCol ? ' selected' : '') + '>' + e(c.label + (c.unidad ? ' (' + c.unidad + ')' : '')) + '</option>').join('');
       }
       $('#l-valor-campo').hidden = st.pestana !== 'lecturas' || !['mayor', 'menor', 'igual', 'texto'].includes(st.lCond);
     }
@@ -87,7 +92,11 @@
         if (st.turno && String(r.turno) !== st.turno) return false;
         if (st.inspector && (r.encabezado && r.encabezado.inspector) !== st.inspector) return false;
         if (st.estado && (r.estado === 'completo' ? 'completo' : 'borrador') !== st.estado) return false;
-        if (st.maquina && !(r.filas || []).some((f) => f.id === st.maquina && r.valores && r.valores[st.maquina] && Object.keys(r.valores[st.maquina]).length)) return false;
+        if (st.maquina) {
+          const fr = M.formato(r.formatoId);
+          const sec = fr && M.secciones(fr, r).find((x) => x.titulo === st.maquina);
+          if (!sec || !sec.campos.some((c) => r.valores && r.valores[c.id] != null && r.valores[c.id] !== '')) return false;
+        }
         if (st.alertas && !M.resumen(r).alertas.length) return false;
         if (palabras.length) {
           const t = r._txt || (r._txt = M.textoBusqueda(r));
@@ -106,15 +115,13 @@
       const txt = M.normalizar(valor);
       for (const r of registros) {
         if (r.formatoId !== f.id) continue;
-        for (const fila of r.filas || []) {
-          if (st.lMaquina && fila.id !== st.lMaquina) continue;
-          const vals = (r.valores || {})[fila.id] || {};
-          for (const c of f.tabla.columnas) {
-            if (st.lCol && c.id !== st.lCol) continue;
-            if (M.omitida(fila, c)) continue;
-            const v = vals[c.id];
+        for (const sec of M.secciones(f, r)) {
+          if (st.lMaquina && sec.titulo !== st.lMaquina) continue;
+          for (const c of sec.campos) {
+            if (st.lCol && c.label !== st.lCol) continue;
+            const v = r.valores && r.valores[c.id];
             if (v == null || v === '') continue;
-            const ev = M.evaluar(c, fila, v);
+            const ev = M.evaluar(f, c, v);
             const n = U.aNumero(v);
             let ok = true;
             switch (st.lCond) {
@@ -125,6 +132,7 @@
               case 'texto': ok = !txt || M.normalizar(M.textoValor(c, v)).includes(txt); break;
               default: ok = true;
             }
+            const fila = { nombre: sec.titulo };
             if (ok) out.push({ r, fila, c, v, ev });
           }
         }
@@ -164,7 +172,7 @@
                 '<td class="chk"><input type="checkbox" data-sel-id="' + e(r.id) + '"' + (seleccion.has(r.id) ? ' checked' : '') + ' aria-label="Seleccionar"></td>' +
                 '<td class="fuerte num">' + e(U.fechaCorta(r.fecha)) + '</td>' +
                 '<td class="nowrap">' + e(M.nombreTurno(r.turno)) + '</td>' +
-                '<td class="col-formato"><div class="fuerte">' + e(f ? M.tituloCorto(f) : r.formatoId) + '</div><div class="t-xs muted">' + e(f ? f.codigo : '') + '</div></td>' +
+                '<td class="col-formato"><div class="fuerte">' + e(f ? M.tituloRegistro(f, r) : r.formatoId) + '</div><div class="t-xs muted">' + e(f ? f.archivo : '') + '</div></td>' +
                 '<td data-m="ocultar">' + e((r.encabezado && r.encabezado.inspector) || r.creadoPor || '') + '</td>' +
                 '<td data-m="ocultar">' + V.miniAvance(res) + '</td>' +
                 '<td>' + V.badgeAlertas(res.alertas.length) + '</td>' +
@@ -187,9 +195,9 @@
         '<div class="resultado-cab"><b>' + lista.length + ' lectura' + (lista.length === 1 ? '' : 's') + '</b><span class="espacio"></span>' +
           (lista.length ? '<button class="btn btn-texto btn-chico" data-exp="lecturas">' + U.icon('excel', 'sm') + 'Exportar a Excel</button>' : '') + '</div>' +
         (lista.length
-          ? '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Fecha</th><th>Turno</th><th>Equipo</th><th>Dato</th><th>Valor</th><th>Rango</th><th>Inspector</th></tr></thead><tbody>' +
+          ? '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Fecha</th><th>Turno</th><th>Sección</th><th>Dato</th><th>Valor</th><th>Rango</th><th>Inspector</th></tr></thead><tbody>' +
             visibles.map(({ r, fila, c, v, ev }) => {
-              const lim = M.limite(c, fila);
+              const lim = M.limite(M.formato(r.formatoId), c);
               return '<tr data-id="' + e(r.id) + '"><td class="fuerte num">' + e(U.fechaCorta(r.fecha)) + '</td><td class="nowrap">' + e(M.nombreTurno(r.turno)) + '</td>' +
                 '<td class="fuerte">' + e(fila.nombre) + '</td><td>' + e(c.label) + '</td>' +
                 '<td>' + (M.esAlerta(ev) ? '<span class="badge badge-bad">' + U.icon('alerta') : '<span class="num fuerte">') + e(M.textoValor(c, v)) + (c.unidad ? ' ' + e(c.unidad) : '') + '</span></td>' +
@@ -274,9 +282,9 @@
       try {
         const X = await V.excel();
         await X.exportarTabla('Lecturas_' + U.hoyISO(), 'Lecturas',
-          ['Fecha', 'Turno', 'Equipo', 'Dato', 'Valor', 'Unidad', 'Rango', 'Alerta', 'Inspector', 'Folio'],
+          ['Fecha', 'Turno', 'Sección', 'Dato', 'Valor', 'Unidad', 'Rango', 'Alerta', 'Inspector', 'Folio'],
           l.map(({ r, fila, c, v, ev }) => [U.parseISO(r.fecha), M.nombreTurno(r.turno), fila.nombre, c.label,
-            c.tipo === 'numero' ? U.aNumero(v) : M.textoValor(c, v), c.unidad || '', M.textoLimite(M.limite(c, fila)), M.esAlerta(ev) ? 'Sí' : '',
+            c.tipo === 'numero' ? U.aNumero(v) : M.textoValor(c, v), c.unidad || '', M.textoLimite(M.limite(M.formato(r.formatoId), c)), M.esAlerta(ev) ? 'Sí' : '',
             (r.encabezado && r.encabezado.inspector) || '', r.id.split('_').pop().toUpperCase()]));
         U.toast('Excel descargado');
       } catch (err) { console.error(err); U.toast('No se pudo generar el Excel', 'error'); }

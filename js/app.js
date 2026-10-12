@@ -183,6 +183,7 @@
     U.$('#pantalla-acceso').hidden = true;
     U.$('#app').hidden = false;
     App.aplicarConfig(await DB.obtenerConfig());
+    try { await M.cargarPlantillas(); } catch (e) { console.error(e); U.toast('No se pudieron cargar los formatos. Revisa la conexión.', 'error', 6000); }
     if (quitarConfig) quitarConfig();
     quitarConfig = DB.suscribirConfig((d) => { if (d) App.aplicarConfig(d); });
     pintarInspector();

@@ -8,7 +8,7 @@
   Vistas.exportar = async (main) => {
     const g = U.lsGet(CLAVE, {});
     const st = {
-      formato: g.formato || '',
+      formato: g.formato && M.formato(g.formato) ? g.formato : '',
       modo: g.modo || 'rango',
       rapido: g.rapido || 'hoy',
       turno: g.turno || '',
@@ -46,7 +46,7 @@
           '<div class="tarjeta" style="margin-bottom:16px"><div class="tarjeta-cuerpo">' +
             '<div class="exp-acciones">' +
               '<button class="btn btn-primario" data-acc="imprimir">' + U.icon('imprimir') + '<span class="t">Vista previa e imprimir<small id="x-cuenta1"></small></span></button>' +
-              '<button class="btn btn-secundario" data-acc="excel">' + U.icon('excel') + '<span class="t">Excel con el formato<small>Una hoja por rutina</small></span></button>' +
+              '<button class="btn btn-secundario" data-acc="excel">' + U.icon('excel') + '<span class="t">Excel con el formato<small>El mismo archivo original, ya lleno</small></span></button>' +
               '<button class="btn btn-secundario" data-acc="datos">' + U.icon('tabla') + '<span class="t">Excel de datos<small>Tabla para análisis</small></span></button>' +
               '<button class="btn btn-secundario" data-acc="blanco">' + U.icon('hoja') + '<span class="t">Formato en blanco<small>Para llenar a mano</small></span></button>' +
             '</div></div></div>' +
@@ -104,7 +104,8 @@
     function pintarLista() {
       const lista = encontrados();
       const n = lista.filter((r) => !st.excluidos.has(r.id)).length;
-      $('#x-cuenta1').textContent = n + (n === 1 ? ' hoja' : ' hojas');
+      const nh = M.paginas(lista.filter((r) => !st.excluidos.has(r.id))).length;
+      $('#x-cuenta1').textContent = nh + (nh === 1 ? ' hoja' : ' hojas') + ' · ' + n + (n === 1 ? ' registro' : ' registros');
       let desc;
       if (st.modo === 'dias') desc = st.dias.size ? st.dias.size + (st.dias.size === 1 ? ' día elegido' : ' días elegidos') : 'Ningún día elegido';
       else desc = st.desde === st.hasta ? U.fechaLarga(st.desde) : U.fechaMedia(st.desde) + ' — ' + U.fechaMedia(st.hasta);
@@ -118,7 +119,7 @@
               const res = M.resumen(r, f);
               return '<tr data-tog="' + e(r.id) + '"><td class="chk"><input type="checkbox" data-x="' + e(r.id) + '"' + (st.excluidos.has(r.id) ? '' : ' checked') + ' aria-label="Incluir"></td>' +
                 '<td class="fuerte num">' + e(U.fechaCorta(r.fecha)) + '</td><td class="nowrap">' + e(M.nombreTurno(r.turno)) + '</td>' +
-                '<td class="col-formato"><div class="fuerte">' + e(f ? M.tituloCorto(f) : r.formatoId) + '</div><div class="t-xs muted">' + e(f ? f.codigo : '') + '</div></td>' +
+                '<td class="col-formato"><div class="fuerte">' + e(f ? M.tituloRegistro(f, r) : r.formatoId) + '</div><div class="t-xs muted">' + e(f ? f.archivo : '') + '</div></td>' +
                 '<td data-m="ocultar">' + e(r.encabezado && r.encabezado.inspector || '') + '</td><td data-m="ocultar">' + V.badgeEstado(r) + '</td><td>' + V.badgeAlertas(res.alertas.length) + '</td></tr>';
             }).join('') + '</tbody></table></div>'
           : '<div class="vacio">' + U.icon('calendario') + '<p><b>No hay rutinas en esas fechas</b></p><p class="t-sm">Los días con registros tienen un punto azul en el calendario.</p></div>');
@@ -193,7 +194,7 @@
         if (!f && M.formatos().length === 1) f = M.formatos()[0];
         if (!f) {
           const id = await U.modal({ titulo: 'Formato en blanco', ancho: 520, contenido: '<p class="modal-texto" style="margin-bottom:12px">¿Qué formato quieres imprimir en blanco?</p>' +
-            '<div class="lista-edit">' + M.formatos().map((x) => '<button class="btn btn-secundario btn-bloque" style="justify-content:flex-start" data-elegir="' + e(x.id) + '">' + U.icon('hoja') + e(x.codigo + ' · ' + x.titulo) + '</button>').join('') + '</div>',
+            '<div class="lista-edit">' + M.formatos().map((x) => '<button class="btn btn-secundario btn-bloque" style="justify-content:flex-start" data-elegir="' + e(x.id) + '">' + U.icon('hoja') + e(x.titulo) + '</button>').join('') + '</div>',
             botones: [], alAbrir: (c, cerrar) => c.addEventListener('click', (ev2) => { const x = ev2.target.closest('[data-elegir]'); if (x) cerrar(x.dataset.elegir); }) });
           f = M.formato(id);
           if (!f) return;
@@ -204,7 +205,8 @@
       const sel = elegidos();
       if (!sel.length) { U.toast('No hay rutinas seleccionadas para esas fechas', 'aviso'); return; }
       if (acc === 'imprimir') {
-        if (sel.length > 60 && !(await U.confirmar('Muchas hojas', 'Vas a generar ' + sel.length + ' hojas. Puede tardar un poco. ¿Continuar?', 'Continuar'))) return;
+        const nh = M.paginas(sel).length;
+        if (nh > 60 && !(await U.confirmar('Muchas hojas', 'Vas a generar ' + nh + ' hojas. Puede tardar un poco. ¿Continuar?', 'Continuar'))) return;
         V.vistaPrevia({ registros: sel });
       } else if (acc === 'excel') V.exportarExcel(sel);
       else if (acc === 'datos') V.exportarExcel(sel, 'datos');

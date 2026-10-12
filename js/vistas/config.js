@@ -8,7 +8,7 @@
     let seccion = (params.consulta && params.consulta.get('s')) || U.lsGet('ps_conf_seccion', 'general');
     const secciones = [
       ['general', 'ajustes', 'General'],
-      ['equipos', 'captura', 'Equipos y límites'],
+      ['equipos', 'alerta', 'Rangos de alerta'],
       ['seguridad', 'candado', 'Seguridad'],
       ['datos', 'base', 'Datos y respaldo'],
       ['instalar', 'tableta', 'Instalar en tableta']
@@ -47,47 +47,30 @@
         '</div></div>';
     }
 
-    /* ---------------- Equipos y límites ---------------- */
+    /* ---------------- Rangos de alerta ---------------- */
     let fSel = M.formatos()[0] && M.formatos()[0].id;
-    let borradorFilas = null;
+    let borrador = null; // { campoId: [min, max] }
     function equipos() {
       const f = M.formato(fSel);
-      const ov = M.config.formatos && M.config.formatos[f.id];
-      if (!borradorFilas) borradorFilas = U.clone(ov && ov.filas && ov.filas.length ? ov.filas : f.tabla.filas);
-      const nums = M.colsNumericas(f);
-      const todas = f.tabla.columnas.filter((c) => c.tipo !== 'texto' && c.tipo !== 'hora');
+      const ov = (M.config.limites && M.config.limites[f.id]) || {};
+      if (!borrador) borrador = U.clone(ov);
+      const secs = M.seccionesTodas(f).filter((x) => x.campos.some((c) => c.tipo === 'numero'));
       cont.innerHTML =
-        '<div class="tarjeta conf-seccion"><div class="tarjeta-cab"><h2>Equipos y límites</h2><span class="espacio"></span>' +
-          '<select class="select" id="conf-formato" style="max-width:360px">' + V.opcionesFormatos(fSel, false) + '</select></div>' +
+        '<div class="tarjeta conf-seccion"><div class="tarjeta-cab"><h2>Rangos de alerta</h2><span class="espacio"></span>' +
+          '<select class="select" id="conf-formato" style="max-width:380px">' + M.formatos().map((x) => '<option value="' + e(x.id) + '"' + (x.id === fSel ? ' selected' : '') + '>' + e(x.titulo) + '</option>').join('') + '</select></div>' +
         '<div class="tarjeta-cuerpo">' +
-          '<p class="t-sm muted" style="margin-bottom:14px">Agrega, quita, renombra u ordena los equipos de este formato y ajusta los rangos de cada medición. Los registros ya capturados no cambian.' + (ov ? ' <b>Este formato tiene cambios respecto al original.</b>' : '') + '</p>' +
-          '<div id="maqs">' + borradorFilas.map((x, i) => {
-            const abierto = x._abierto;
-            return '<div class="maq-edit"><div class="maq-edit-cab">' +
-              '<div class="orden-btns"><button class="btn-icono" data-sube="' + i + '" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>' + U.icon('arriba', 'sm') + '</button><button class="btn-icono" data-baja="' + i + '" aria-label="Bajar"' + (i === borradorFilas.length - 1 ? ' disabled' : '') + '>' + U.icon('abajo', 'sm') + '</button></div>' +
-              '<input class="input" data-i="' + i + '" data-k="nombre" value="' + e(x.nombre) + '" aria-label="Nombre del equipo">' +
-              '<input class="input" data-i="' + i + '" data-k="codigo" value="' + e(x.codigo || '') + '" placeholder="Código" aria-label="Código">' +
-              '<label class="switch" title="Activo"><input type="checkbox" data-activo="' + i + '"' + (x.activo !== false ? ' checked' : '') + '><span class="pista"></span><span class="t-sm">Activo</span></label>' +
-              '<div class="fila-flex" style="gap:4px"><button class="btn btn-texto btn-chico" data-abrir="' + i + '">' + U.icon(abierto ? 'arriba' : 'abajo', 'sm') + 'Rangos</button>' +
-              '<button class="btn-icono" data-borrar="' + i + '" aria-label="Quitar equipo">' + U.icon('basura', 'sm') + '</button></div></div>' +
-              (abierto ? '<div class="maq-edit-lim">' +
-                nums.map((c) => {
-                  const l = x.limites && x.limites[c.id];
-                  const om = x.omitir && x.omitir.includes(c.id);
-                  return '<div class="lim-campo"><span><b>' + e(c.label) + '</b>' + (c.unidad ? ' <span class="muted">' + e(c.unidad) + '</span>' : '') + '</span>' +
-                    '<input class="input" inputmode="decimal" data-lim="' + i + '" data-c="' + e(c.id) + '" data-p="0" placeholder="' + e(c.min != null ? c.min : 'mín') + '" value="' + e(l && l[0] != null ? l[0] : '') + '"' + (om ? ' disabled' : '') + ' aria-label="Mínimo">' +
-                    '<input class="input" inputmode="decimal" data-lim="' + i + '" data-c="' + e(c.id) + '" data-p="1" placeholder="' + e(c.max != null ? c.max : 'máx') + '" value="' + e(l && l[1] != null ? l[1] : '') + '"' + (om ? ' disabled' : '') + ' aria-label="Máximo"></div>';
-                }).join('') +
-                '<div style="grid-column:1/-1"><div class="etq" style="margin:6px 0 8px">No aplica para este equipo (celda sombreada)</div><div class="chips">' +
-                  todas.map((c) => '<button class="chip" data-omit="' + i + '" data-c="' + e(c.id) + '" aria-pressed="' + !!(x.omitir && x.omitir.includes(c.id)) + '">' + e(c.label) + '</button>').join('') + '</div>' +
-                '<p class="t-xs muted" style="margin-top:8px">Deja un rango vacío para usar el general del formato (el que aparece en gris).</p></div></div>' : '') +
-            '</div>';
-          }).join('') + '</div>' +
-          '<div class="grupo-btns" style="margin-top:14px">' +
-            '<button class="btn btn-secundario" data-g="agregarMaq">' + U.icon('mas') + '<span>Agregar equipo</span></button>' +
-            '<span class="espacio"></span>' +
-            (ov ? '<button class="btn btn-texto" data-g="restaurar">' + U.icon('historial', 'sm') + 'Restaurar original</button>' : '') +
-            '<button class="btn btn-primario" data-g="equipos">' + U.icon('guardar') + '<span>Guardar cambios</span></button>' +
+          '<p class="t-sm muted" style="margin-bottom:14px">Define el mínimo y el máximo aceptable de cada lectura. Lo que quede fuera se marca en rojo al capturar y aparece en las alertas. Deja vacío para no revisar ese límite.</p>' +
+          (secs.length ? secs.map((sec) => '<div class="maq-edit"><div class="maq-edit-cab" style="grid-template-columns:1fr"><b>' + e(sec.titulo) + '</b></div><div class="maq-edit-lim">' +
+            sec.campos.filter((c) => c.tipo === 'numero').map((c) => {
+              const l = borrador[c.id];
+              return '<div class="lim-campo"><span><b>' + e(c.label) + '</b>' + (c.unidad ? ' <span class="muted">' + e(c.unidad) + '</span>' : '') + '</span>' +
+                '<input class="input" inputmode="decimal" data-lim="' + e(c.id) + '" data-p="0" placeholder="' + e(c.min != null ? c.min : 'mín') + '" value="' + e(l && l[0] != null ? l[0] : '') + '" aria-label="Mínimo">' +
+                '<input class="input" inputmode="decimal" data-lim="' + e(c.id) + '" data-p="1" placeholder="' + e(c.max != null ? c.max : 'máx') + '" value="' + e(l && l[1] != null ? l[1] : '') + '" aria-label="Máximo"></div>';
+            }).join('') + '</div></div>').join('') : '<div class="vacio">Este formato no tiene lecturas numéricas.</div>') +
+          '<p class="t-xs muted" style="margin-top:10px">Los valores en gris son los rangos que ya trae el formato (por ejemplo, 15 °C de temperatura máxima del agua o 8 kg/cm² de presión de operación de los pulmones).</p>' +
+          '<div class="grupo-btns" style="margin-top:14px"><span class="espacio"></span>' +
+            (Object.keys(ov).length ? '<button class="btn btn-texto" data-g="restaurar">' + U.icon('historial', 'sm') + 'Quitar rangos personalizados</button>' : '') +
+            '<button class="btn btn-primario" data-g="equipos">' + U.icon('guardar') + '<span>Guardar rangos</span></button>' +
           '</div>' +
         '</div></div>';
     }
@@ -144,7 +127,8 @@
             '<div class="tarjeta tarjeta-cuerpo"><h3 style="margin-bottom:8px">Android (Chrome)</h3><ol class="t-sm" style="margin:0;padding-left:18px;line-height:1.7"><li>Abre la página en Chrome.</li><li>Toca el menú <b>⋮</b>.</li><li>Elige <b>Instalar aplicación</b> o <b>Agregar a pantalla principal</b>.</li></ol></div>' +
           '</div></div></div>' +
         '<div class="tarjeta conf-seccion"><div class="tarjeta-cab"><h2>Formatos disponibles</h2></div><ul class="lista-simple">' +
-          M.formatos().map((f) => '<li><div class="li">' + U.icon('hoja') + '<span class="principal"><b>' + e(f.titulo) + '</b><span>' + e(f.codigo) + ' · Rev. ' + e(f.revision) + ' · Vigencia ' + e(f.vigencia || '—') + (f.ejemplo ? ' · Ejemplo' : '') + '</span></span></div></li>').join('') +
+          M.formatos().map((f) => '<li><div class="li">' + U.icon('hoja') + '<span class="principal"><b>' + e(f.titulo) + '</b><span>' + e(f.archivo) + '</span></span>' +
+            '<button class="btn btn-texto btn-chico" data-original="' + e(f.id) + '">' + U.icon('descargar', 'sm') + 'Excel original</button></div></li>').join('') +
         '</ul></div>';
     }
 
@@ -159,21 +143,7 @@
       if (!t) return;
       if (t.dataset.sec) { ev.preventDefault(); seccion = t.dataset.sec; U.lsSet('ps_conf_seccion', seccion); pintar(); return; }
       if (t.dataset.quitarInsp) { M.config.inspectores = M.config.inspectores.filter((n) => n !== t.dataset.quitarInsp); guardarConfig(); general(); return; }
-      // Equipos
-      if (t.dataset.sube != null) { const i = +t.dataset.sube; [borradorFilas[i - 1], borradorFilas[i]] = [borradorFilas[i], borradorFilas[i - 1]]; equipos(); return; }
-      if (t.dataset.baja != null) { const i = +t.dataset.baja; [borradorFilas[i + 1], borradorFilas[i]] = [borradorFilas[i], borradorFilas[i + 1]]; equipos(); return; }
-      if (t.dataset.abrir != null) { const x = borradorFilas[+t.dataset.abrir]; x._abierto = !x._abierto; equipos(); return; }
-      if (t.dataset.borrar != null) {
-        const x = borradorFilas[+t.dataset.borrar];
-        if (!(await U.confirmar('Quitar equipo', '¿Quitar <b>' + e(x.nombre) + '</b> del formato? Los registros anteriores lo conservan. Si solo dejará de usarse un tiempo, mejor desactívalo.', 'Quitar', true))) return;
-        borradorFilas.splice(+t.dataset.borrar, 1); equipos(); return;
-      }
-      if (t.dataset.omit != null) {
-        const x = borradorFilas[+t.dataset.omit];
-        x.omitir = x.omitir || [];
-        if (x.omitir.includes(t.dataset.c)) x.omitir = x.omitir.filter((c) => c !== t.dataset.c); else x.omitir.push(t.dataset.c);
-        equipos(); return;
-      }
+      if (t.dataset.original) { V.descargarOriginal(M.formato(t.dataset.original)); return; }
       const g = t.dataset.g;
       if (!g) return;
       if (g === 'turnos') {
@@ -185,25 +155,19 @@
         if (!n) return inp.focus();
         if (!M.config.inspectores.includes(n)) M.config.inspectores = M.config.inspectores.concat(n);
         guardarConfig(); general();
-      } else if (g === 'agregarMaq') {
-        borradorFilas.push({ id: 'eq-' + U.uid(), nombre: 'Nuevo equipo', codigo: '', _abierto: true });
-        equipos();
-        const ins = U.$$('[data-k="nombre"]', cont); const ult = ins[ins.length - 1]; if (ult) { ult.focus(); ult.select(); }
       } else if (g === 'equipos') {
-        const limpias = borradorFilas.map((x) => {
-          const y = Object.assign({}, x); delete y._abierto;
-          if (y.limites) { for (const k of Object.keys(y.limites)) { const l = y.limites[k]; if (l[0] == null && l[1] == null) delete y.limites[k]; } if (!Object.keys(y.limites).length) delete y.limites; }
-          if (y.omitir && !y.omitir.length) delete y.omitir;
-          return y;
-        });
-        if (limpias.some((x) => !x.nombre.trim())) { U.toast('Todos los equipos necesitan nombre', 'error'); return; }
-        M.config.formatos = Object.assign({}, M.config.formatos, { [fSel]: { filas: limpias } });
+        const limpio = {};
+        for (const id in borrador) {
+          const l = borrador[id];
+          if (l && (l[0] != null || l[1] != null)) limpio[id] = [l[0] == null ? null : l[0], l[1] == null ? null : l[1]];
+        }
+        M.config.limites = Object.assign({}, M.config.limites, { [fSel]: limpio });
         guardarConfig();
-        borradorFilas = null; equipos();
+        borrador = null; equipos();
       } else if (g === 'restaurar') {
-        if (!(await U.confirmar('Restaurar original', 'Se descartarán los cambios de equipos y rangos de este formato.', 'Restaurar', true))) return;
-        const fs = Object.assign({}, M.config.formatos); delete fs[fSel]; M.config.formatos = fs;
-        guardarConfig(); borradorFilas = null; equipos();
+        if (!(await U.confirmar('Quitar rangos personalizados', 'Se usarán solo los rangos que trae el formato.', 'Quitar', true))) return;
+        const lim = Object.assign({}, M.config.limites); delete lim[fSel]; M.config.limites = lim;
+        guardarConfig(); borrador = null; equipos();
       } else if (g === 'salir') App.salir();
       else if (g === 'instalar' && App.instalar) { App.instalar.prompt(); App.instalar = null; }
       else if (g === 'respaldo') {
@@ -220,20 +184,16 @@
     });
     main.addEventListener('input', (ev) => {
       const t = ev.target;
-      if (t.dataset.i != null && t.dataset.k) borradorFilas[+t.dataset.i][t.dataset.k] = t.value;
       if (t.dataset.lim != null) {
-        const x = borradorFilas[+t.dataset.lim];
-        x.limites = x.limites || {};
-        const l = x.limites[t.dataset.c] || [null, null];
+        const l = borrador[t.dataset.lim] || [null, null];
         l[+t.dataset.p] = U.aNumero(t.value);
-        x.limites[t.dataset.c] = l;
+        borrador[t.dataset.lim] = l;
       }
     });
     main.addEventListener('change', async (ev) => {
       const t = ev.target;
       if (t.id === 'firma-obl') { M.config.firmaObligatoria = t.checked; guardarConfig(); }
-      else if (t.id === 'conf-formato') { fSel = t.value; borradorFilas = null; equipos(); }
-      else if (t.dataset.activo != null) borradorFilas[+t.dataset.activo].activo = t.checked;
+      else if (t.id === 'conf-formato') { fSel = t.value; borrador = null; equipos(); }
       else if (t.id === 'restaurar') {
         const a = t.files && t.files[0];
         t.value = '';
