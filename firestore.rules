@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore para Rutinas de Inspección.
+// Solo la cuenta compartida de la planta (la que entra con la contraseña)
+// puede leer o escribir. Cambia el correo si usas otro en js/config.js.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function esPlanta() {
+      return request.auth != null
+        && request.auth.token.email == 'inspeccion@polyshel.app';
+    }
+    match /{document=**} {
+      allow read, write: if esPlanta();
+    }
+  }
+}
