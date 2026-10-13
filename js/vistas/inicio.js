@@ -9,11 +9,6 @@
     return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
   }
 
-  function avisos() {
-    if (DB.modo !== 'local') return '';
-    return '<div class="aviso">' + U.icon('tableta') + '<div><b>Modo local</b>Los registros se guardan solo en este dispositivo. Para guardarlos en la nube y verlos desde cualquier tableta o computadora, conecta Firebase (instrucciones en README.md).</div></div>';
-  }
-
   /** Estado de hoy de un formato, según cada cuánto se captura. */
   function estadoHoy(f, registros) {
     const hoy = U.hoyISO();
@@ -46,18 +41,14 @@
           '<a class="btn btn-primario btn-chico" href="#/editar/' + encodeURIComponent(r.id) + '">Continuar</a></div>';
       }).join('');
       let botones;
-      if (f.tipos) botones = f.tipos.map((t) => '<button class="btn btn-primario" data-nuevo="' + e(f.id) + '" data-tipo="' + e(t.id) + '">' + U.icon('mas') + '<span>' + e(t.nombre) + '</span></button>').join('');
-      else if (f.registroPor === 'turno') botones = '<button class="btn btn-primario" data-nuevo="' + e(f.id) + '">' + U.icon('mas') + '<span>Capturar · ' + e(M.nombreTurno(turnoAhora)) + '</span></button>';
-      else botones = '<button class="btn btn-primario" data-nuevo="' + e(f.id) + '">' + U.icon('mas') + '<span>Capturar hoy</span></button>';
-      return '<div class="tarjeta formato-card">' +
-        '<div class="cab"><div class="ico-caja">' + U.icon('captura', 'lg') + '</div>' +
-          '<div style="flex:1;min-width:0"><h3>' + e(f.titulo) + '</h3>' +
-          '<div class="meta">' + e(f.descripcion || '') + '</div>' +
-          '<div class="archivo">' + U.icon('hoja', 'sm') + e(f.archivo) + '</div></div></div>' +
-        '<div class="turnos-hoy">' + estadoHoy(f, registros) + '</div>' +
+      if (f.tipos) botones = f.tipos.map((t) => '<button class="btn btn-primario btn-chico" data-nuevo="' + e(f.id) + '" data-tipo="' + e(t.id) + '">' + U.icon('mas') + '<span>' + e(t.nombre) + '</span></button>').join('');
+      else if (f.registroPor === 'turno') botones = '<button class="btn btn-primario btn-chico" data-nuevo="' + e(f.id) + '">' + U.icon('mas') + '<span>Capturar · ' + e(M.nombreTurno(turnoAhora)) + '</span></button>';
+      else botones = '<button class="btn btn-primario btn-chico" data-nuevo="' + e(f.id) + '">' + U.icon('mas') + '<span>Capturar hoy</span></button>';
+      return '<div class="tarjeta formato-card" title="' + e(f.descripcion || '') + '">' +
+        '<div class="cab"><h3>' + e(f.titulo) + '</h3><div class="turnos-hoy">' + estadoHoy(f, registros) + '</div></div>' +
         borradores +
         '<div class="grupo-btns">' + botones +
-          '<button class="btn btn-secundario" data-blanco="' + e(f.id) + '">' + U.icon('imprimir') + '<span>Formato en blanco</span></button>' +
+          '<button class="btn btn-secundario btn-chico" data-blanco="' + e(f.id) + '" title="Formato en blanco">' + U.icon('imprimir') + '<span>En blanco</span></button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -101,7 +92,6 @@
     main.innerHTML =
       '<div class="vista-cab saludo"><div class="titulos"><h1 id="saludo"></h1><p>' + e(U.capital(U.fechaLarga(U.hoyISO()))) + '</p></div>' +
       '<a class="btn btn-primario btn-grande" href="#/capturar">' + U.icon('mas') + '<span>Capturar rutina</span></a></div>' +
-      avisos() +
       '<div class="tiles" id="tiles"></div>' +
       '<div class="inicio-grid">' +
         '<section><div class="seccion-tit"><h2>Rutinas</h2></div><div id="formatos"></div></section>' +

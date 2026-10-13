@@ -143,7 +143,7 @@
         const est = U.$('#sec-' + i + ' .cap-sec-estado', main);
         if (est) est.innerHTML = st.alertas ? '<span class="badge badge-bad">' + U.icon('alerta') + st.alertas + '</span>'
           : st.completa ? '<span class="badge badge-ok">' + U.icon('check') + 'Completa</span>'
-          : '<span class="badge">' + st.llenos + ' / ' + st.total + '</span>';
+          : st.total ? '<span class="badge">' + st.llenos + ' / ' + st.total + '</span>' : '';
       });
     }
 
@@ -156,7 +156,7 @@
       return U.icon('alerta', 'sm') + (ev === 'alto' ? 'Arriba del máximo (' + lim[1] + ')' : 'Abajo del mínimo (' + lim[0] + ')');
     }
 
-    function campoHTML(c) {
+    function campoHTML(c, sinEtiqueta) {
       const v = reg.valores[c.id];
       const id = 'f_' + c.id;
       const lim = M.limite(f, c);
@@ -180,7 +180,7 @@
         ctrl = '<div class="opciones-btn cf-ctrl" role="group" aria-label="' + e(c.label) + '">' +
           (c.opciones || []).map((o) => '<button type="button" class="' + (c.alerta && c.alerta.includes(o) ? 'b-mal' : 'b-ok') + '" data-c="' + e(c.id) + '" data-v="' + e(o) + '" aria-pressed="' + (v === o) + '">' + e(o) + '</button>').join('') + '</div>';
       } else {
-        return '<div class="cf cf-texto">' + etiqueta + '<textarea class="textarea" id="' + id + '" rows="2" data-c="' + e(c.id) + '" placeholder="Escribe aquí cualquier detalle o anomalía">' + e(v || '') + '</textarea></div>';
+        return '<div class="cf cf-texto">' + (sinEtiqueta ? '' : etiqueta) + '<textarea class="textarea" id="' + id + '" rows="2" data-c="' + e(c.id) + '" placeholder="Escribe aquí cualquier detalle o anomalía">' + e(v || '') + '</textarea></div>';
       }
       return '<div class="cf' + cls + '">' + etiqueta + ctrl + '</div>';
     }
@@ -208,7 +208,7 @@
         for (const c of s.campos) {
           if (c.grupo && c.grupo !== grupo) cuerpo += '<div class="cf-grupo">' + e(c.grupo) + '</div>';
           grupo = c.grupo || grupo;
-          cuerpo += campoHTML(c);
+          cuerpo += campoHTML(c, s.campos.length === 1 && c.label === s.titulo);
         }
       }
       const hayChecks = s.campos.some((c) => c.tipo === 'check' || c.tipo === 'paloma');
@@ -235,7 +235,7 @@
       const zona = U.$('#zona', main);
       let cont = U.$('#vivo', zona);
       if (!cont) {
-        zona.innerHTML = '<div class="aviso info">' + U.icon('info') + '<div>Así se verá en la hoja impresa y en el Excel. Solo se muestra este registro; al exportar o imprimir varias fechas, se acomodan juntas como en el papel.</div></div><div class="visor-hoja" id="vivo"></div>';
+        zona.innerHTML = '<p class="t-xs muted" style="margin:0 2px 6px">Así se verá en la hoja impresa y en el Excel (solo este registro; al exportar varias fechas se acomodan juntas).</p><div class="visor-hoja" id="vivo"></div>';
         cont = U.$('#vivo', zona);
       }
       cont.innerHTML = '';
