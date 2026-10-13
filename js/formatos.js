@@ -108,9 +108,9 @@
         c('p_pulmon_sk', 'Presión pulmón de aire comprimido', 'numero', 31, { unidad: 'kg/cm²' })
       ] },
       { id: 'medidores', titulo: 'Medidores de agua (una vez al día)', porDia: true, campos: [
-        c('med_cisternas', 'Medidor agua cisternas', 'numero', 32, { opcional: true }),
-        c('med_banos_ext', 'Medidor agua baños extrusión', 'numero', 33, { opcional: true }),
-        c('med_banos_n6', 'Medidor agua baños nave 6', 'numero', 34, { opcional: true })
+        c('med_cisternas', 'Medidor agua cisternas', 'numero', 32, { opcional: true, acumulado: true }),
+        c('med_banos_ext', 'Medidor agua baños extrusión', 'numero', 33, { opcional: true, acumulado: true }),
+        c('med_banos_n6', 'Medidor agua baños nave 6', 'numero', 34, { opcional: true, acumulado: true })
       ] }
     ],
     paginar(regs) {
@@ -142,7 +142,7 @@
      ====================================================================== */
   const medidorAgua = (id, titulo, filaFecha) => ({
     id, titulo, filaFecha,
-    campos: [1, 2, 3, 4, 5, 6].map((n) => c(id + '_' + n, 'Lectura ' + n, 'numero', filaFecha + 1 + n, { opcional: n > 1 }))
+    campos: [1, 2, 3, 4, 5, 6].map((n) => c(id + '_' + n, 'Lectura ' + n, 'numero', filaFecha + 1 + n, { opcional: n > 1, acumulado: true }))
   });
   const AGUA = {
     id: 'consumo-agua',

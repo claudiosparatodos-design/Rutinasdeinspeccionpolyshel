@@ -36,6 +36,7 @@
     const secciones = () => M.secciones(f, reg);
 
     let modo = 'captura';
+    let soloPend = false;
 
     /* ---------------- Guardado automático ---------------- */
     let estadoGuardado = esNuevo ? 'nuevo' : 'ok';
@@ -114,6 +115,8 @@
       '<div id="zona"></div>' +
       '<div class="tarjeta cierre" id="cierre"' + ((f.firmas || []).length ? '' : ' hidden') + '></div>' +
       '<div class="barra-final">' +
+        '<button class="btn btn-suave" data-a="pendiente">' + U.icon('abajo') + '<span>Siguiente pendiente</span></button>' +
+        '<span class="espacio"></span>' +
         '<button class="btn btn-secundario" data-a="previa">' + U.icon('ojo') + '<span>Vista previa</span></button>' +
         '<button class="btn btn-secundario" data-a="guardar">' + U.icon('guardar') + '<span>Guardar y salir</span></button>' +
         '<button class="btn btn-ok" data-a="finalizar">' + U.icon('check') + '<span>' + (eraCompleto ? 'Guardar cambios' : 'Finalizar rutina') + '</span></button>' +
@@ -129,6 +132,9 @@
     /* ---------------- Progreso ---------------- */
     function pintarProgreso() {
       const r = M.resumen(reg, f);
+      const np = pendientes().length;
+      const bp = U.$('[data-a="pendiente"]', main);
+      if (bp) { bp.querySelector('span').textContent = np ? 'Siguiente pendiente (' + np + ')' : 'Todo capturado'; bp.disabled = !np; }
       U.$('#prog-txt', main).textContent = r.llenos + ' de ' + r.requeridos + ' datos capturados · ' + r.completas + ' de ' + r.total + ' secciones completas';
       U.$('#prog-pct', main).textContent = r.pct + '%';
       U.$('#alertas-mini', main).innerHTML = r.alertas.length ? '<span class="badge badge-bad">' + U.icon('alerta') + r.alertas.length + '</span>' : '';
@@ -140,6 +146,8 @@
         const cls = st.alertas ? 'bad' : st.completa ? 'ok' : st.tocada ? 'azul' : '';
         const chip = U.$('[data-ir="' + i + '"] .punto', main);
         if (chip) chip.className = 'punto ' + cls;
+        const secEl = U.$('#sec-' + i, main);
+        if (secEl) secEl.classList.toggle('completa', !s.campos.some((c) => c.tipo !== 'texto' && !lleno(reg.valores[c.id]) && (!c.opcional || !M.requeridos(s.campos).length)));
         const est = U.$('#sec-' + i + ' .cap-sec-estado', main);
         if (est) est.innerHTML = st.alertas ? '<span class="badge badge-bad">' + U.icon('alerta') + st.alertas + '</span>'
           : st.completa ? '<span class="badge badge-ok">' + U.icon('check') + 'Completa</span>'
@@ -156,6 +164,59 @@
       return U.icon('alerta', 'sm') + (ev === 'alto' ? 'Arriba del máximo (' + lim[1] + ')' : 'Abajo del mínimo (' + lim[0] + ')');
     }
 
+    /* ---------------- Lectura anterior (referencia, como en las apps de inspección) ---------------- */
+    const lleno = (v) => v != null && v !== '';
+    let anteriores = {}; // campoId -> { v, r }
+    function anteriorHTML(c) {
+      const a = anteriores[c.id];
+      const v = reg.valores[c.id];
+      if (!a) return '';
+      let txt = 'Anterior: ' + M.textoValor(c, a.v) + (c.unidad ? ' ' + c.unidad : '') + ' · ' + U.fechaCorta(a.r.fecha).slice(0, 5) + (a.r.turno ? ' T' + a.r.turno : '');
+      if (c.acumulado && lleno(v)) {
+        const d = U.aNumero(v) - U.aNumero(a.v);
+        if (isFinite(d)) txt += d < 0 ? '  ⚠ menor que la anterior, revisa' : '  (+' + U.fmtNum(d) + ')';
+      }
+      return e(txt);
+    }
+    function pintarAnteriores() {
+      U.$$('[data-ant]', main).forEach((el) => {
+        const c = campoPorId(el.dataset.ant);
+        if (!c) return;
+        el.innerHTML = anteriorHTML(c);
+        el.classList.toggle('aviso-ant', el.textContent.includes('⚠'));
+      });
+    }
+    async function cargarAnteriores() {
+      try {
+        const lista = await DB.listarRegistros({ desde: U.sumarDias(reg.fecha, -45), hasta: reg.fecha });
+        const clave = (r) => r.fecha + '|' + String(r.turno || '') + '|' + String(r.creadoEn || 0).padStart(15, '0');
+        const yo = clave(reg);
+        const previos = lista.filter((r) => r.formatoId === f.id && r.id !== reg.id && clave(r) < yo).sort((a, b) => clave(b).localeCompare(clave(a)));
+        anteriores = {};
+        for (const r of previos) for (const k in (r.valores || {})) if (!anteriores[k] && lleno(r.valores[k])) anteriores[k] = { v: r.valores[k], r };
+        pintarAnteriores();
+      } catch (err) { console.warn(err); }
+    }
+
+    /** Primer dato obligatorio sin llenar, en el orden del formato. */
+    // Si el formato no tiene datos obligatorios (lecturas opcionales), cuentan todas las casillas
+    const pendientes = () => {
+      const todos = M.campos(f, reg).filter((c) => c.tipo !== 'texto');
+      const req = M.requeridos(todos);
+      return (req.length ? req : todos).filter((c) => !lleno(reg.valores[c.id]));
+    };
+    function irPendiente() {
+      const p = pendientes()[0];
+      if (!p) { U.toast('No hay datos pendientes', 'ok', 1600); return; }
+      if (modo !== 'captura') { modo = 'captura'; pintarZona(); }
+      const fila = U.$('[data-fila="' + CSS.escape(p.id) + '"]', main);
+      if (!fila) return;
+      fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      fila.classList.remove('destello'); void fila.offsetWidth; fila.classList.add('destello');
+      const inp = U.$('input, textarea', fila);
+      if (inp) setTimeout(() => inp.focus({ preventScroll: true }), 350);
+    }
+
     function campoHTML(c, sinEtiqueta) {
       const v = reg.valores[c.id];
       const id = 'f_' + c.id;
@@ -163,11 +224,12 @@
       const ev = M.evaluar(f, c, v);
       const cls = M.esAlerta(ev) ? ' mal' : ev === 'ok' && c.tipo === 'numero' && lim ? ' ok' : '';
       if (c.tipo === 'paloma') {
-        return '<button type="button" class="cf-paloma' + (v ? ' hecho' : '') + '" data-paloma="' + e(c.id) + '" aria-pressed="' + !!v + '">' +
+        return '<button type="button" class="cf-paloma' + (v ? ' hecho lleno' : '') + '" data-fila="' + e(c.id) + '" data-paloma="' + e(c.id) + '" aria-pressed="' + !!v + '">' +
           '<span class="paloma-caja">' + (v ? U.icon('check') : '') + '</span><span class="paloma-txt">' + e(c.label) + '</span></button>';
       }
       const extra = [lim ? M.textoLimite(lim, c.unidad) : '', c.ayuda && !lim ? c.ayuda : ''].filter(Boolean).join(' · ');
-      const etiqueta = '<label class="cf-lbl" for="' + id + '">' + e(c.label) + (extra ? '<small>' + e(extra) + '</small>' : '') + '</label>';
+      const etiqueta = '<label class="cf-lbl" for="' + id + '">' + e(c.label) + (extra ? '<small>' + e(extra) + '</small>' : '') +
+        (c.tipo === 'numero' ? '<small class="cf-ant" data-ant="' + e(c.id) + '">' + anteriorHTML(c) + '</small>' : '') + '</label>';
       let ctrl;
       if (c.tipo === 'numero') {
         ctrl = '<div class="cf-ctrl"><input class="input cf-num" id="' + id + '" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" data-c="' + e(c.id) + '" value="' + e(v == null ? '' : v) + '" placeholder="—">' +
@@ -180,9 +242,9 @@
         ctrl = '<div class="opciones-btn cf-ctrl" role="group" aria-label="' + e(c.label) + '">' +
           (c.opciones || []).map((o) => '<button type="button" class="' + (c.alerta && c.alerta.includes(o) ? 'b-mal' : 'b-ok') + '" data-c="' + e(c.id) + '" data-v="' + e(o) + '" aria-pressed="' + (v === o) + '">' + e(o) + '</button>').join('') + '</div>';
       } else {
-        return '<div class="cf cf-texto">' + (sinEtiqueta ? '' : etiqueta) + '<textarea class="textarea" id="' + id + '" rows="2" data-c="' + e(c.id) + '" placeholder="Escribe aquí cualquier detalle o anomalía">' + e(v || '') + '</textarea></div>';
+        return '<div class="cf cf-texto opc" data-fila="' + e(c.id) + '">' + (sinEtiqueta ? '' : etiqueta) + '<textarea class="textarea" id="' + id + '" rows="2" data-c="' + e(c.id) + '" placeholder="Escribe aquí cualquier detalle o anomalía">' + e(v || '') + '</textarea></div>';
       }
-      return '<div class="cf' + cls + '">' + etiqueta + ctrl + '</div>';
+      return '<div class="cf' + cls + (lleno(v) ? ' lleno' : '') + '" data-fila="' + e(c.id) + '">' + etiqueta + ctrl + '</div>';
     }
 
     function matrizHTML(s) {
@@ -224,10 +286,13 @@
     function pintarModoCaptura() {
       const lista = secciones();
       U.$('#zona', main).innerHTML =
-        (lista.length > 1 ? '<nav class="cap-saltos" aria-label="Ir a sección">' + lista.map((s, i) => '<button data-ir="' + i + '"><span class="punto"></span>' + e(s.titulo) + '</button>').join('') + '</nav>' : '') +
-        '<div class="cap-lista">' + lista.map(seccionHTML).join('') + '</div>';
+        '<nav class="cap-saltos" aria-label="Ir a sección">' +
+          '<button class="filtro-pend" data-a="soloPend" aria-pressed="' + soloPend + '">' + U.icon('filtro', 'sm') + 'Solo pendientes</button>' +
+          (lista.length > 1 ? lista.map((s, i) => '<button data-ir="' + i + '"><span class="punto"></span>' + e(s.titulo) + '</button>').join('') : '') + '</nav>' +
+        '<div class="cap-lista' + (soloPend ? ' solo-pend' : '') + '">' + lista.map(seccionHTML).join('') + '</div>';
       lista.forEach((s) => pintarFotos(s.id));
       pintarProgreso();
+      pintarAnteriores();
     }
 
     /* ---------------- Ver formato (en vivo) ---------------- */
@@ -397,9 +462,10 @@
       if (!msg) msg = '<p class="modal-texto">Todo completo y sin alertas. ¿Finalizar la rutina?</p>';
       const ok = await U.modal({
         titulo: eraCompleto ? 'Guardar cambios' : 'Finalizar rutina', contenido: msg, ancho: 560,
-        botones: [{ texto: 'Seguir capturando', clase: 'btn-secundario', valor: false }, { texto: eraCompleto ? 'Guardar' : 'Finalizar', clase: 'btn-ok', valor: true }]
+        botones: [faltan > 0 ? { texto: 'Ir a lo que falta', clase: 'btn-secundario', valor: 'ir' } : { texto: 'Seguir capturando', clase: 'btn-secundario', valor: false }, { texto: eraCompleto ? 'Guardar' : 'Finalizar', clase: 'btn-ok', valor: true }]
       });
-      if (!ok) return;
+      if (ok === 'ir') { irPendiente(); return; }
+      if (ok !== true) return;
       for (const fi of f.firmas || []) { const d = reg.firmas[fi.id]; if (d && d.nombre && !d.img) await actualizarFirma(fi.id); }
       reg.estado = 'completo';
       if (!reg.finalizadoEn) reg.finalizadoEn = Date.now();
@@ -413,6 +479,9 @@
     const campoPorId = (id) => M.campo(f, reg, id);
     const ponerValor = (c, v) => {
       if (v === '' || v == null) delete reg.valores[c.id]; else reg.valores[c.id] = v;
+      const fila = U.$('[data-fila="' + CSS.escape(c.id) + '"]', main);
+      if (fila) fila.classList.toggle('lleno', lleno(v));
+      if (c.acumulado) { const a = U.$('[data-ant="' + CSS.escape(c.id) + '"]', main); if (a) { a.innerHTML = anteriorHTML(c); a.classList.toggle('aviso-ant', a.textContent.includes('⚠')); } }
       cambio();
     };
 
@@ -453,8 +522,8 @@
     main.addEventListener('change', async (ev) => {
       const t = ev.target;
       if (t.dataset.foto) { const a = t.files && t.files[0]; if (a) agregarFoto(t.dataset.foto, a); t.value = ''; return; }
-      if (t.id === 'c-fecha') { if (t.value) { reg.fecha = t.value; pintarTitulo(); cambio(); } return; }
-      if (t.id === 'c-turno') { reg.turno = t.value; pintarTitulo(); cambio(); }
+      if (t.id === 'c-fecha') { if (t.value) { reg.fecha = t.value; pintarTitulo(); cambio(); cargarAnteriores(); } return; }
+      if (t.id === 'c-turno') { reg.turno = t.value; pintarTitulo(); cambio(); cargarAnteriores(); }
     });
     main.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' && ev.target.matches('input[inputmode="decimal"]')) {
@@ -481,17 +550,26 @@
       if (t.dataset.ir != null) { const sec = U.$('#sec-' + t.dataset.ir, main); if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       if (t.dataset.todo != null) {
         let n = 0;
+        const marcados = [];
         for (const c of secciones()[+t.dataset.todo].campos) {
           if (reg.valores[c.id]) continue;
-          if (c.tipo === 'check') { reg.valores[c.id] = 'ok'; n++; }
-          if (c.tipo === 'paloma') { reg.valores[c.id] = 'si'; n++; }
+          if (c.tipo === 'check') { reg.valores[c.id] = 'ok'; n++; marcados.push(c.id); }
+          if (c.tipo === 'paloma') { reg.valores[c.id] = 'si'; n++; marcados.push(c.id); }
         }
+        const idx = +t.dataset.todo;
+        const deshacer = () => {
+          marcados.forEach((k) => delete reg.valores[k]);
+          const el = U.$('#sec-' + idx, main);
+          if (el) { el.outerHTML = seccionHTML(secciones()[idx], idx); pintarFotos(secciones()[idx].id); pintarAnteriores(); }
+          cambio();
+        };
         cambio();
         const sec = U.$('#sec-' + t.dataset.todo, main);
         sec.outerHTML = seccionHTML(secciones()[+t.dataset.todo], +t.dataset.todo);
         pintarFotos(secciones()[+t.dataset.todo].id);
         pintarProgreso();
-        U.toast(n ? 'Se marc' + (n === 1 ? 'ó 1 casilla' : 'aron ' + n + ' casillas') : 'Ya estaban todas marcadas', n ? 'ok' : 'aviso', 1600);
+        pintarAnteriores();
+        U.toast(n ? 'Se marc' + (n === 1 ? 'ó 1 casilla' : 'aron ' + n + ' casillas') : 'Ya estaban todas marcadas', n ? 'ok' : 'aviso', n ? 5000 : 1600, n ? { texto: 'Deshacer', fn: deshacer } : null);
         return;
       }
       if (t.dataset.firmar) { firmar(t.dataset.firmar); return; }
@@ -526,6 +604,13 @@
       }
       const a = t.dataset.a;
       if (!a) return;
+      if (a === 'pendiente') { irPendiente(); return; }
+      if (a === 'soloPend') {
+        soloPend = !soloPend;
+        t.setAttribute('aria-pressed', soloPend);
+        U.$('.cap-lista', main).classList.toggle('solo-pend', soloPend);
+        return;
+      }
       if (a === 'cabecera') {
         const det = U.$('#cap-detalle', main);
         det.hidden = !det.hidden;
@@ -544,11 +629,21 @@
     pintarZona();
     pintarCierre();
     pintarProgreso();
+    cargarAnteriores();
+
+    // Mantener la pantalla encendida mientras se captura (si el navegador lo permite)
+    let bloqueo = null;
+    const pedirPantalla = async () => { try { if ('wakeLock' in navigator && document.visibilityState === 'visible') bloqueo = await navigator.wakeLock.request('screen'); } catch (err) { /* no disponible */ } };
+    pedirPantalla();
+    const alVolver = () => { if (document.visibilityState === 'visible') pedirPantalla(); };
+    document.addEventListener('visibilitychange', alVolver);
 
     const alOcultar = () => { if (document.visibilityState === 'hidden' && sucio) autoguardar.flush(); };
     document.addEventListener('visibilitychange', alOcultar);
     return () => {
       U.$('#vista').classList.remove('vista-compacta');
+      document.removeEventListener('visibilitychange', alVolver);
+      if (bloqueo) bloqueo.release().catch(() => {});
       document.removeEventListener('visibilitychange', alOcultar);
       if (sucio) autoguardar.flush(); else autoguardar.cancel();
     };

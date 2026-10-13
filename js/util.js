@@ -243,11 +243,18 @@
     '<svg class="ico ' + (clase || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[nombre] || '') + '</svg>';
 
   /* ---------- Avisos ---------- */
-  U.toast = (msg, tipo, ms) => {
+  /** accion opcional: { texto, fn } muestra un botón (p. ej. "Deshacer"). */
+  U.toast = (msg, tipo, ms, accion) => {
     let cont = U.$('#toasts');
     if (!cont) { cont = U.html('<div id="toasts" role="status" aria-live="polite"></div>'); document.body.appendChild(cont); }
     const ic = tipo === 'error' ? 'alerta' : tipo === 'aviso' ? 'info' : 'check';
     const t = U.html('<div class="toast toast-' + (tipo || 'ok') + '">' + U.icon(ic) + '<span>' + U.esc(msg) + '</span></div>');
+    if (accion) {
+      const b = U.html('<button class="toast-accion">' + U.esc(accion.texto) + '</button>');
+      b.addEventListener('click', () => { accion.fn(); t.remove(); });
+      t.appendChild(b);
+      t.style.pointerEvents = 'auto';
+    }
     cont.appendChild(t);
     requestAnimationFrame(() => t.classList.add('visible'));
     setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 300); }, ms || 3200);
