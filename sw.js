@@ -1,6 +1,6 @@
 /* Service worker: permite abrir la app sin internet (la capa de datos de
    Firebase guarda los registros en la tableta y los sube al volver la señal). */
-const VERSION = 'rutinas-v2.0.0';
+const VERSION = 'rutinas-v2.1.0';
 const ARCHIVOS = [
   './',
   'index.html',

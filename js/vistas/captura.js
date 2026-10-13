@@ -36,9 +36,6 @@
     const secciones = () => M.secciones(f, reg);
 
     let modo = 'captura';
-    let actual = 0;
-    const pend = secciones().findIndex((s) => !M.estadoSeccion(f, reg, s).completa);
-    if (pend >= 0) actual = pend;
 
     /* ---------------- Guardado automático ---------------- */
     let estadoGuardado = esNuevo ? 'nuevo' : 'ok';
@@ -87,60 +84,70 @@
     const opcTurnos = (M.config.turnos || []).map((t) => '<option value="' + e(t.id) + '"' + (String(reg.turno) === t.id ? ' selected' : '') + '>' + e(t.nombre) + '</option>').join('');
     const etiquetaPersona = f.id === 'paro-arranque' ? 'Nombre del técnico' : 'Inspector';
     main.innerHTML =
-      '<div class="migas"><a href="#/inicio">Inicio</a>' + U.icon('der', 'sm') + '<a href="#/capturar">Capturar</a>' + U.icon('der', 'sm') + '<span>' + e(M.tituloCorto(f)) + '</span></div>' +
-      '<div class="tarjeta cap-cab">' +
-        '<div class="fila-tit"><div class="t"><div class="codigo">' + U.icon('hoja', 'sm') + ' ' + e(f.archivo) + '</div><h1 id="cap-titulo"></h1></div>' +
+      // Encabezado compacto: una sola línea; al tocarlo se abren los datos generales
+      '<div class="tarjeta cap-mini">' +
+        '<div class="cap-mini-fila">' +
+          '<button class="cap-mini-btn" data-a="cabecera" aria-expanded="false" aria-controls="cap-detalle">' +
+            '<span class="cap-mini-t"><b id="cap-titulo"></b><span id="cap-resumen"></span></span>' +
+            '<span class="cap-mini-prog"><span class="avance" id="prog-barra"><span></span></span><span class="num" id="prog-pct"></span></span>' +
+            '<span id="alertas-mini"></span>' +
+            '<span class="cap-mini-flecha">' + U.icon('abajo', 'sm') + '</span>' +
+          '</button>' +
+          '<span class="guardado" id="guardado"></span>' +
           '<div class="segmentado" role="group" aria-label="Modo">' +
-            '<button data-modo="captura">' + U.icon('tarjeta', 'sm') + 'Captura</button>' +
-            '<button data-modo="formato">' + U.icon('hoja', 'sm') + 'Ver formato</button>' +
-          '</div></div>' +
-        (f.tipos ? '<div class="segmentado" role="group" aria-label="Tipo" style="margin-top:14px">' + f.tipos.map((t) => '<button data-tipo="' + e(t.id) + '">' + e(t.nombre) + '</button>').join('') + '</div>' : '') +
-        '<div class="cap-datos">' +
-          '<div class="campo"><label for="c-fecha">Fecha</label><input class="input" type="date" id="c-fecha" value="' + e(reg.fecha) + '"></div>' +
-          (M.usaTurno(f) ? '<div class="campo"><label for="c-turno">Turno</label><select class="select" id="c-turno">' + opcTurnos + '</select></div>' : '') +
-          '<div class="campo ancho2"><label for="c-insp">' + etiquetaPersona + '</label><input class="input" id="c-insp" list="lista-insp" value="' + e(reg.encabezado.inspector || '') + '"></div>' +
+            '<button data-modo="captura">' + U.icon('tarjeta', 'sm') + '<span class="solo-ancho">Captura</span></button>' +
+            '<button data-modo="formato">' + U.icon('hoja', 'sm') + '<span class="solo-ancho">Ver formato</span></button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="cap-detalle" id="cap-detalle" hidden>' +
+          '<div class="codigo">' + U.icon('hoja', 'sm') + ' ' + e(f.archivo) + '</div>' +
+          (f.tipos ? '<div class="segmentado" role="group" aria-label="Tipo" style="margin-top:10px">' + f.tipos.map((t) => '<button data-tipo="' + e(t.id) + '">' + e(t.nombre) + '</button>').join('') + '</div>' : '') +
+          '<div class="cap-datos">' +
+            '<div class="campo"><label for="c-fecha">Fecha</label><input class="input" type="date" id="c-fecha" value="' + e(reg.fecha) + '"></div>' +
+            (M.usaTurno(f) ? '<div class="campo"><label for="c-turno">Turno</label><select class="select" id="c-turno">' + opcTurnos + '</select></div>' : '') +
+            '<div class="campo ancho2"><label for="c-insp">' + etiquetaPersona + '</label><input class="input" id="c-insp" list="lista-insp" value="' + e(reg.encabezado.inspector || '') + '"></div>' +
+          '</div>' +
+          '<div class="t-sm muted" id="prog-txt" style="margin-top:10px"></div>' +
         '</div>' +
         '<datalist id="lista-insp">' + (M.config.inspectores || []).map((n) => '<option value="' + e(n) + '">').join('') + '</datalist>' +
-        '<div class="cap-barra"><div class="progreso"><div class="txt" id="prog-txt"></div><div class="avance" id="prog-barra"><span></span></div></div>' +
-          '<span class="guardado" id="guardado"></span></div>' +
       '</div>' +
       '<div id="zona"></div>' +
       '<div class="tarjeta cierre" id="cierre"' + ((f.firmas || []).length ? '' : ' hidden') + '></div>' +
       '<div class="barra-final">' +
         '<button class="btn btn-secundario" data-a="previa">' + U.icon('ojo') + '<span>Vista previa</span></button>' +
         '<button class="btn btn-secundario" data-a="guardar">' + U.icon('guardar') + '<span>Guardar y salir</span></button>' +
-        '<button class="btn btn-ok btn-grande" data-a="finalizar">' + U.icon('check') + '<span>' + (eraCompleto ? 'Guardar cambios' : 'Finalizar rutina') + '</span></button>' +
+        '<button class="btn btn-ok" data-a="finalizar">' + U.icon('check') + '<span>' + (eraCompleto ? 'Guardar cambios' : 'Finalizar rutina') + '</span></button>' +
       '</div>';
     pintarGuardado();
 
     const pintarTitulo = () => {
       U.$('#cap-titulo', main).textContent = f.tipos ? 'Rutina de ' + M.nombreTipo(f, reg).toLowerCase() : f.titulo;
+      U.$('#cap-resumen', main).textContent = [U.fechaCorta(reg.fecha), M.usaTurno(f) ? M.nombreTurno(reg.turno) : '', reg.encabezado.inspector || ''].filter(Boolean).join(' · ');
       U.$$('[data-tipo]', main).forEach((b) => b.setAttribute('aria-pressed', b.dataset.tipo === reg.tipo));
     };
 
     /* ---------------- Progreso ---------------- */
     function pintarProgreso() {
       const r = M.resumen(reg, f);
-      U.$('#prog-txt', main).innerHTML = '<span>' + r.llenos + ' de ' + r.requeridos + ' datos capturados · ' + r.completas + ' de ' + r.total + ' secciones completas</span>' +
-        (r.alertas.length ? '<span class="badge badge-bad">' + U.icon('alerta') + r.alertas.length + ' alerta' + (r.alertas.length === 1 ? '' : 's') + '</span>' : '');
+      U.$('#prog-txt', main).textContent = r.llenos + ' de ' + r.requeridos + ' datos capturados · ' + r.completas + ' de ' + r.total + ' secciones completas';
+      U.$('#prog-pct', main).textContent = r.pct + '%';
+      U.$('#alertas-mini', main).innerHTML = r.alertas.length ? '<span class="badge badge-bad">' + U.icon('alerta') + r.alertas.length + '</span>' : '';
       const barra = U.$('#prog-barra', main);
       barra.className = 'avance' + (r.pct === 100 ? ' ok' : '');
       barra.firstElementChild.style.width = r.pct + '%';
-      const lista = secciones();
-      U.$$('[data-sec]', main).forEach((b) => {
-        const s = lista[+b.dataset.sec];
-        if (!s) return;
+      secciones().forEach((s, i) => {
         const st = M.estadoSeccion(f, reg, s);
-        const ic = U.$('.estado-maq', b);
-        const cls = st.alertas ? 'alerta' : st.completa ? 'completa' : st.tocada ? 'proceso' : '';
-        ic.className = 'estado-maq ' + cls;
-        ic.innerHTML = st.alertas ? U.icon('alerta') : st.completa ? U.icon('check') : '';
-        const sub = U.$('.nm span', b);
-        if (sub) sub.textContent = st.alertas ? st.alertas + ' alerta' + (st.alertas === 1 ? '' : 's') : st.completa ? 'Completa' : st.llenos ? st.llenos + ' de ' + st.total : 'Pendiente';
+        const cls = st.alertas ? 'bad' : st.completa ? 'ok' : st.tocada ? 'azul' : '';
+        const chip = U.$('[data-ir="' + i + '"] .punto', main);
+        if (chip) chip.className = 'punto ' + cls;
+        const est = U.$('#sec-' + i + ' .cap-sec-estado', main);
+        if (est) est.innerHTML = st.alertas ? '<span class="badge badge-bad">' + U.icon('alerta') + st.alertas + '</span>'
+          : st.completa ? '<span class="badge badge-ok">' + U.icon('check') + 'Completa</span>'
+          : '<span class="badge">' + st.llenos + ' / ' + st.total + '</span>';
       });
     }
 
-    /* ---------------- Campos ---------------- */
+    /* ---------------- Campos (un renglón por dato, en el orden del formato) ---------------- */
     function evaluacionHTML(c, v) {
       const ev = M.evaluar(f, c, v);
       if (c.tipo !== 'numero' || ev == null) return '';
@@ -154,29 +161,28 @@
       const id = 'f_' + c.id;
       const lim = M.limite(f, c);
       const ev = M.evaluar(f, c, v);
-      let cls = M.esAlerta(ev) ? ' mal' : ev === 'ok' && c.tipo === 'numero' && lim ? ' ok' : '';
-      let cuerpo = '';
+      const cls = M.esAlerta(ev) ? ' mal' : ev === 'ok' && c.tipo === 'numero' && lim ? ' ok' : '';
+      if (c.tipo === 'paloma') {
+        return '<button type="button" class="cf-paloma' + (v ? ' hecho' : '') + '" data-paloma="' + e(c.id) + '" aria-pressed="' + !!v + '">' +
+          '<span class="paloma-caja">' + (v ? U.icon('check') : '') + '</span><span class="paloma-txt">' + e(c.label) + '</span></button>';
+      }
+      const extra = [lim ? M.textoLimite(lim, c.unidad) : '', c.ayuda && !lim ? c.ayuda : ''].filter(Boolean).join(' · ');
+      const etiqueta = '<label class="cf-lbl" for="' + id + '">' + e(c.label) + (extra ? '<small>' + e(extra) + '</small>' : '') + '</label>';
+      let ctrl;
       if (c.tipo === 'numero') {
-        cuerpo = '<div class="entrada"><input class="input" id="' + id + '" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" data-c="' + e(c.id) + '" value="' + e(v == null ? '' : v) + '" placeholder="—">' +
-          (c.unidad ? '<span class="unidad">' + e(c.unidad) + '</span>' : '') + '</div><div class="ev">' + evaluacionHTML(c, v) + '</div>';
+        ctrl = '<div class="cf-ctrl"><input class="input cf-num" id="' + id + '" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" data-c="' + e(c.id) + '" value="' + e(v == null ? '' : v) + '" placeholder="—">' +
+          '<span class="unidad">' + e(c.unidad || '') + '</span></div><div class="ev">' + evaluacionHTML(c, v) + '</div>';
       } else if (c.tipo === 'check') {
-        cuerpo = '<div class="opciones-btn" role="group" aria-label="' + e(c.label) + '">' +
+        ctrl = '<div class="opciones-btn cf-ctrl" role="group" aria-label="' + e(c.label) + '">' +
           [['ok', '✓ Bien', 'b-ok'], ['mal', '✗ Falla', 'b-mal'], ['na', 'N/A', 'b-na']].map(([val, txt, k]) =>
             '<button type="button" class="' + k + '" data-c="' + e(c.id) + '" data-v="' + val + '" aria-pressed="' + (v === val) + '">' + txt + '</button>').join('') + '</div>';
       } else if (c.tipo === 'opciones') {
-        cuerpo = '<div class="opciones-btn" role="group" aria-label="' + e(c.label) + '">' +
+        ctrl = '<div class="opciones-btn cf-ctrl" role="group" aria-label="' + e(c.label) + '">' +
           (c.opciones || []).map((o) => '<button type="button" class="' + (c.alerta && c.alerta.includes(o) ? 'b-mal' : 'b-ok') + '" data-c="' + e(c.id) + '" data-v="' + e(o) + '" aria-pressed="' + (v === o) + '">' + e(o) + '</button>').join('') + '</div>';
-      } else if (c.tipo === 'paloma') {
-        cls += ' paloma' + (v ? ' hecho' : '');
-        return '<button type="button" class="med' + cls + ' ancho" data-paloma="' + e(c.id) + '" aria-pressed="' + !!v + '">' +
-          '<span class="paloma-caja">' + (v ? U.icon('check') : '') + '</span><span class="paloma-txt">' + e(c.label) + '</span></button>';
       } else {
-        cuerpo = '<textarea class="textarea" id="' + id + '" rows="2" data-c="' + e(c.id) + '" placeholder="Escribe aquí cualquier detalle o anomalía">' + e(v || '') + '</textarea>';
+        return '<div class="cf cf-texto">' + etiqueta + '<textarea class="textarea" id="' + id + '" rows="2" data-c="' + e(c.id) + '" placeholder="Escribe aquí cualquier detalle o anomalía">' + e(v || '') + '</textarea></div>';
       }
-      const ancho = c.tipo === 'texto' ? ' ancho' : '';
-      return '<div class="med' + cls + ancho + '">' +
-        '<div class="med-cab"><label for="' + id + '">' + e(c.label) + '</label>' + (lim ? '<span class="rango">' + e(M.textoLimite(lim, c.unidad)) + '</span>' : '') + '</div>' +
-        (c.ayuda ? '<div class="t-xs muted">' + e(c.ayuda) + '</div>' : '') + cuerpo + '</div>';
+      return '<div class="cf' + cls + '">' + etiqueta + ctrl + '</div>';
     }
 
     function matrizHTML(s) {
@@ -192,60 +198,35 @@
         }).join('') + '</tr>').join('') + '</tbody></table></div>';
     }
 
-    function pintarSeccion() {
-      const lista = secciones();
-      actual = Math.min(actual, lista.length - 1);
-      const s = lista[actual];
+    function seccionHTML(s, i) {
       let cuerpo = '';
-      if (s.porDia) cuerpo += '<div class="aviso info" style="margin:12px 0 0">' + U.icon('info') + '<div>Este dato se registra una vez al día; en la hoja ocupa los 3 turnos de la fecha.</div></div>';
+      if (s.porDia) cuerpo += '<div class="cf-nota">' + U.icon('info', 'sm') + 'Se registra una vez al día (en la hoja ocupa los 3 turnos de la fecha).</div>';
       if (s.matriz) {
-        cuerpo += matrizHTML(s);
-        const resto = s.campos.filter((c) => !c.grupo);
-        const sueltas = resto.filter((c) => c.tipo !== 'texto');
-        if (sueltas.length) cuerpo += '<div class="meds">' + sueltas.map(campoHTML).join('') + '</div>';
-        cuerpo += '<div class="meds" style="margin-top:12px">' + resto.filter((c) => c.tipo === 'texto').map(campoHTML).join('') + '</div>';
+        cuerpo += matrizHTML(s) + s.campos.filter((c) => !c.grupo).map(campoHTML).join('');
       } else {
-        let grupo = null, abierto = false;
+        let grupo = null;
         for (const c of s.campos) {
-          const g = c.tipo === 'texto' ? 'Observaciones' : c.grupo || null;
-          if (g !== grupo || !abierto) {
-            if (abierto) cuerpo += '</div>';
-            if (g) cuerpo += '<div class="grupo-tit">' + e(g) + '</div>';
-            cuerpo += '<div class="meds">';
-            abierto = true; grupo = g;
-          }
+          if (c.grupo && c.grupo !== grupo) cuerpo += '<div class="cf-grupo">' + e(c.grupo) + '</div>';
+          grupo = c.grupo || grupo;
           cuerpo += campoHTML(c);
         }
-        if (abierto) cuerpo += '</div>';
       }
       const hayChecks = s.campos.some((c) => c.tipo === 'check' || c.tipo === 'paloma');
-      U.$('#maq-card', main).innerHTML =
-        '<div class="maq-card-cab"><div class="t"><span>SECCIÓN ' + (actual + 1) + ' DE ' + lista.length + '</span><h2>' + e(s.titulo) + '</h2></div>' +
-          '<div class="maq-acciones">' +
-            (hayChecks ? '<button class="btn btn-secundario btn-chico" data-a="todoOk">' + U.icon('check', 'sm') + '<span>' + (s.campos.some((c) => c.tipo === 'paloma') ? 'Marcar todo' : 'Todo bien') + '</span></button>' : '') +
-            '<label class="btn btn-secundario btn-chico" style="cursor:pointer">' + U.icon('camara', 'sm') + '<span>Foto</span><input type="file" accept="image/*" capture="environment" data-foto="' + e(s.id) + '" hidden></label>' +
-          '</div></div>' +
-        '<div class="maq-cuerpo">' + cuerpo + '<div class="fotos-mini" id="fotos-' + e(s.id) + '" style="margin-top:12px"></div></div>' +
-        '<div class="maq-nav">' +
-          '<button class="btn btn-secundario btn-grande" data-a="ant"' + (actual === 0 ? ' disabled' : '') + '>' + U.icon('izq') + '<span>Anterior</span></button>' +
-          (actual < lista.length - 1
-            ? '<button class="btn btn-primario btn-grande" data-a="sig"><span>Siguiente</span>' + U.icon('der') + '</button>'
-            : '<button class="btn btn-primario btn-grande" data-a="finalizar"><span>Terminar</span>' + U.icon('check') + '</button>') +
-        '</div>';
-      U.$$('[data-sec]', main).forEach((b) => b.setAttribute('aria-current', +b.dataset.sec === actual));
-      const activo = U.$('[data-sec="' + actual + '"]', main);
-      if (activo && activo.scrollIntoView) activo.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      pintarFotos(s.id);
+      return '<section class="tarjeta cap-sec" id="sec-' + i + '">' +
+        '<div class="cap-sec-cab"><h2>' + e(s.titulo) + '</h2><span class="cap-sec-estado"></span><span class="espacio"></span>' +
+          (hayChecks ? '<button class="btn btn-texto btn-chico" data-todo="' + i + '">' + U.icon('check', 'sm') + '<span>' + (s.campos.some((c) => c.tipo === 'paloma') ? 'Marcar todo' : 'Todo bien') + '</span></button>' : '') +
+          '<label class="btn btn-texto btn-chico" style="cursor:pointer">' + U.icon('camara', 'sm') + '<span>Foto</span><input type="file" accept="image/*" capture="environment" data-foto="' + e(s.id) + '" hidden></label>' +
+        '</div>' +
+        '<div class="cap-sec-cuerpo">' + cuerpo + '<div class="fotos-mini" id="fotos-' + e(s.id) + '"></div></div>' +
+      '</section>';
     }
 
     function pintarModoCaptura() {
+      const lista = secciones();
       U.$('#zona', main).innerHTML =
-        '<div class="cap-cuerpo">' +
-          '<div class="tarjeta maq-lista" role="list">' + secciones().map((s, i) =>
-            '<button class="maq-item" role="listitem" data-sec="' + i + '"><span class="estado-maq"></span><span class="nm"><b>' + e(s.titulo) + '</b><span></span></span></button>').join('') + '</div>' +
-          '<div class="tarjeta maq-card" id="maq-card"></div>' +
-        '</div>';
-      pintarSeccion();
+        (lista.length > 1 ? '<nav class="cap-saltos" aria-label="Ir a sección">' + lista.map((s, i) => '<button data-ir="' + i + '"><span class="punto"></span>' + e(s.titulo) + '</button>').join('') + '</nav>' : '') +
+        '<div class="cap-lista">' + lista.map(seccionHTML).join('') + '</div>';
+      lista.forEach((s) => pintarFotos(s.id));
       pintarProgreso();
     }
 
@@ -258,7 +239,13 @@
         cont = U.$('#vivo', zona);
       }
       cont.innerHTML = '';
-      M.paginas([reg]).forEach((pg) => cont.appendChild(V.pagina(pg)));
+      let pags = M.paginas([reg]);
+      // Sin datos todavía: mostrar el formato en blanco
+      if (!pags.length) {
+        const hojas = f.hojaPlantilla ? [f.hojaPlantilla] : M.secciones(f, reg).map((x) => x.hoja).filter(Boolean);
+        pags = M.paginasBlanco(f).filter((pg) => (f.tipos ? pg.hoja.toLowerCase().includes(reg.tipo) : hojas.includes(pg.hoja)));
+      }
+      pags.forEach((pg) => cont.appendChild(V.pagina(pg)));
       requestAnimationFrame(() => V.escalar(cont, 'ajustar'));
       pintarProgreso();
     }
@@ -373,7 +360,7 @@
 
     /* ---------------- Fotos ---------------- */
     let fotos = [];
-    if (!esNuevo) DB.fotosDe(reg.id).then((l) => { fotos = l; if (modo === 'captura') pintarFotos(secciones()[actual].id); }).catch(() => {});
+    if (!esNuevo) DB.fotosDe(reg.id).then((l) => { fotos = l; if (modo === 'captura') secciones().forEach((x) => pintarFotos(x.id)); }).catch(() => {});
     function pintarFotos(secId) {
       const cont = U.$('#fotos-' + CSS.escape(secId), main);
       if (!cont) return;
@@ -433,6 +420,7 @@
       const t = ev.target;
       if (t.id === 'c-insp') {
         reg.encabezado.inspector = t.value;
+        pintarTitulo();
         const fi = (f.firmas || []).find((x) => x.auto === 'inspector');
         if (fi && reg.firmas[fi.id] && !reg.firmas[fi.id].trazo) { reg.firmas[fi.id].nombre = t.value; const n = U.$('[data-firma-nombre="' + fi.id + '"]', main); if (n) n.value = t.value; }
         cambio(); return;
@@ -450,7 +438,7 @@
         if (c.tipo === 'numero') { v = v.replace(',', '.').replace(/[^0-9.\-]/g, ''); if (v !== t.value.replace(',', '.')) t.value = v; v = v.trim(); }
         ponerValor(c, v);
         const ev2 = M.evaluar(f, c, v);
-        const med = t.closest('.med');
+        const med = t.closest('.cf');
         if (med) {
           const lim = M.limite(f, c);
           med.classList.toggle('mal', M.esAlerta(ev2));
@@ -465,8 +453,8 @@
     main.addEventListener('change', async (ev) => {
       const t = ev.target;
       if (t.dataset.foto) { const a = t.files && t.files[0]; if (a) agregarFoto(t.dataset.foto, a); t.value = ''; return; }
-      if (t.id === 'c-fecha') { if (t.value) { reg.fecha = t.value; cambio(); } return; }
-      if (t.id === 'c-turno') { reg.turno = t.value; cambio(); }
+      if (t.id === 'c-fecha') { if (t.value) { reg.fecha = t.value; pintarTitulo(); cambio(); } return; }
+      if (t.id === 'c-turno') { reg.turno = t.value; pintarTitulo(); cambio(); }
     });
     main.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' && ev.target.matches('input[inputmode="decimal"]')) {
@@ -486,11 +474,26 @@
         const marcadas = Object.keys(reg.valores).some((k) => k.startsWith('chk_') && reg.valores[k]);
         if (marcadas && !(await U.confirmar('Cambiar tipo de rutina', 'Las actividades de arranque y paro son distintas; se quitarán las casillas ya marcadas. ¿Continuar?', 'Cambiar'))) return;
         for (const k of Object.keys(reg.valores)) if (k.startsWith('chk_') || k.startsWith('obs_')) delete reg.valores[k];
-        reg.tipo = t.dataset.tipo; actual = 0;
+        reg.tipo = t.dataset.tipo;
         pintarTitulo(); pintarZona(); cambio();
         return;
       }
-      if (t.dataset.sec != null) { actual = +t.dataset.sec; pintarSeccion(); return; }
+      if (t.dataset.ir != null) { const sec = U.$('#sec-' + t.dataset.ir, main); if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if (t.dataset.todo != null) {
+        let n = 0;
+        for (const c of secciones()[+t.dataset.todo].campos) {
+          if (reg.valores[c.id]) continue;
+          if (c.tipo === 'check') { reg.valores[c.id] = 'ok'; n++; }
+          if (c.tipo === 'paloma') { reg.valores[c.id] = 'si'; n++; }
+        }
+        cambio();
+        const sec = U.$('#sec-' + t.dataset.todo, main);
+        sec.outerHTML = seccionHTML(secciones()[+t.dataset.todo], +t.dataset.todo);
+        pintarFotos(secciones()[+t.dataset.todo].id);
+        pintarProgreso();
+        U.toast(n ? 'Se marc' + (n === 1 ? 'ó 1 casilla' : 'aron ' + n + ' casillas') : 'Ya estaban todas marcadas', n ? 'ok' : 'aviso', 1600);
+        return;
+      }
       if (t.dataset.firmar) { firmar(t.dataset.firmar); return; }
       if (t.dataset.borrarFirma) { const d = reg.firmas[t.dataset.borrarFirma]; d.trazo = ''; await actualizarFirma(t.dataset.borrarFirma); pintarCierre(); cambio(); return; }
       if (t.dataset.verFoto) { const x = fotos.find((y) => y.id === t.dataset.verFoto); if (x) V.verFoto(x.data); return; }
@@ -517,24 +520,16 @@
         const nuevo = reg.valores[c.id] === t.dataset.v ? '' : t.dataset.v;
         ponerValor(c, nuevo);
         U.$$('[data-c="' + CSS.escape(c.id) + '"][data-v]', main).forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === nuevo));
-        const med = t.closest('.med');
+        const med = t.closest('.cf');
         if (med) med.classList.toggle('mal', M.esAlerta(M.evaluar(f, c, nuevo)));
         return;
       }
       const a = t.dataset.a;
       if (!a) return;
-      const lista = secciones();
-      if (a === 'sig') { actual = Math.min(lista.length - 1, actual + 1); pintarSeccion(); U.$('#maq-card', main).scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-      else if (a === 'ant') { actual = Math.max(0, actual - 1); pintarSeccion(); U.$('#maq-card', main).scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-      else if (a === 'todoOk') {
-        let n = 0;
-        for (const c of lista[actual].campos) {
-          if (reg.valores[c.id]) continue;
-          if (c.tipo === 'check') { reg.valores[c.id] = 'ok'; n++; }
-          if (c.tipo === 'paloma') { reg.valores[c.id] = 'si'; n++; }
-        }
-        cambio(); pintarSeccion();
-        U.toast(n ? 'Se marcaron ' + n + ' casillas' : 'Ya estaban todas marcadas', n ? 'ok' : 'aviso', 1600);
+      if (a === 'cabecera') {
+        const det = U.$('#cap-detalle', main);
+        det.hidden = !det.hidden;
+        t.setAttribute('aria-expanded', !det.hidden);
       } else if (a === 'previa') { autoguardar.flush(); V.vistaPrevia({ registros: [reg] }); }
       else if (a === 'guardar') {
         autoguardar.cancel();
@@ -544,6 +539,7 @@
       } else if (a === 'finalizar') finalizar();
     });
 
+    U.$('#vista').classList.add('vista-compacta');
     pintarTitulo();
     pintarZona();
     pintarCierre();
@@ -552,6 +548,7 @@
     const alOcultar = () => { if (document.visibilityState === 'hidden' && sucio) autoguardar.flush(); };
     document.addEventListener('visibilitychange', alOcultar);
     return () => {
+      U.$('#vista').classList.remove('vista-compacta');
       document.removeEventListener('visibilitychange', alOcultar);
       if (sucio) autoguardar.flush(); else autoguardar.cancel();
     };
